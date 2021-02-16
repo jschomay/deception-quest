@@ -1,15 +1,43 @@
-'use strict';
+"use strict";
 
 require("./styles.scss");
 
-const {Elm} = require('./Main');
-var app = Elm.Main.init({flags: 6});
+const projectId = "XwKSVJe3dg3ZXdm6Rf9T";
+const projectRef = firebase.firestore().collection("projects").doc(projectId);
 
-app.ports.toJs.subscribe(data => {
-    console.log(data);
-})
-// Use ES2015 syntax and let Babel compile it for you
-var testFn = (inp) => {
-    let a = inp + 1;
-    return a;
-}
+const manifestRef = projectRef.collection("manifest");
+const rulesRef = projectRef.collection("rules");
+
+// start up elm app
+const { Elm } = require("./Main");
+var app = Elm.Main.init({ flags: 6 });
+
+// fetch and import manifest data
+manifestRef.onSnapshot(
+    (snapshot) => {
+        // TODO check if change type is "remove" and respond accordingly
+        // for now this just sends any new/changed docs
+        app.ports.addEntities.send(
+            snapshot
+                .docChanges()
+                .map((c) => c.doc.data())
+                .filter(({ entity }) => !!entity)
+        );
+    },
+    (e) => console.error(e)
+);
+
+// fetch and import rules data
+rulesRef.onSnapshot(
+    (snapshot) => {
+        // TODO check if change type is "remove" and respond accordingly
+        // for now this just sends any new/changed docs
+        app.ports.addRules.send(
+            snapshot
+                .docChanges()
+                .map((c) => c.doc.data())
+                .filter(({ rule_id }) => !!rule_id)
+        );
+    },
+    (e) => console.error(e)
+);
