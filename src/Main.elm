@@ -12,6 +12,9 @@ import NarrativeEngine.Syntax.EntityParser as EntityParser
 import NarrativeEngine.Syntax.Helpers as SyntaxHelpers
 import NarrativeEngine.Syntax.NarrativeParser as NarrativeParser
 import NarrativeEngine.Syntax.RuleParser as RuleParser
+import Random
+import Random.Extra as Random
+import Random.List as Random
 
 
 type alias EntityFields =
@@ -79,8 +82,176 @@ initialModel =
       , ruleCounts = Dict.empty
       , debug = NarrativeEngine.Debug.init
       }
-    , Cmd.none
+    , Random.generate Randomize (makeLineUp 5)
     )
+
+
+type alias NameOptions =
+    { prefixs : List String
+    , mains : List String
+    , suffix1s : List String
+    , suffix2s : List String
+    }
+
+
+monsterNameOptions : NameOptions
+monsterNameOptions =
+    { prefixs =
+        [ "Disproportionate "
+        , "Resurrected "
+        , "Deranged "
+        , "Flying "
+        , "Poisonous "
+        , "Cursed "
+        , "Giant "
+        , "Uncommon "
+        , "Misunderstood "
+        , "Dyslexic "
+        ]
+    , mains =
+        [ "Imp"
+        , "Snail"
+        , "Spider"
+        , "Rat"
+        , "Sock puppet"
+        , "Bob the Blob"
+        , "Clown"
+        , "Newt"
+        , "Politician"
+        , "Teddy-bear"
+        ]
+    , suffix1s =
+        [ " of doom"
+        , " the meek"
+        , " the terrible"
+        , " of disreputable company"
+        , " the feared"
+        , " the mildly annoying"
+        ]
+    , suffix2s =
+        [ " with 1000 eyes"
+        , " with no face"
+        , " with secret powers"
+        , ", of limited intellect"
+        , ", armed to the teeth"
+        , ", without grace"
+        ]
+    }
+
+
+heroNameOptions : NameOptions
+heroNameOptions =
+    { prefixs =
+        [ "Ill-equipped "
+        , "Constable "
+        , "Young "
+        , "Above-average "
+        , "Undisputed "
+        , "Untrained "
+        , "Angry "
+        , "Crazy "
+        , "Unlucky "
+        , "Undercover "
+        , "Super "
+        ]
+    , mains =
+        [ "Average Joe"
+        , "Sir Wellington"
+        , "Sam Harberspoon"
+        , "Jimbo"
+        , "Ivan"
+        , "Sallyworth"
+        , "Kennith"
+        , "Malinda"
+        , "Anastasia"
+        , "Max \"the Axe\""
+        , "\"Bob next door\""
+        ]
+    , suffix1s =
+        [ " the disgraced"
+        , " the undisputed"
+        , " the bashful"
+        , " the terrible"
+        , " the forgetful"
+        , " the unknown"
+        , " the dim-witted"
+        , " the third"
+        , " the unknown"
+        ]
+    , suffix2s =
+        [ ", from far, far away"
+        , ", son of Agathar"
+        , ", of recent notoriety"
+        , ", of unparalleled beauty"
+        , ", of questionable antics"
+        ]
+    }
+
+
+makeLineUp : Int -> Random.Generator LineUp
+makeLineUp n =
+    let
+        range =
+            List.range 1 n
+
+        monsterLevels =
+            range |> List.map ((*) 10) |> Random.shuffle
+
+        heroLevels =
+            range |> List.map ((*) 10 >> (+) 5) |> Random.shuffle
+
+        randomNames nameOptions =
+            let
+                sometimesTakeName p l =
+                    Random.weighted
+                        ( 1 - p, ( "", l ) )
+                        [ ( p, ( List.head l |> Maybe.withDefault "", List.drop 1 l ) ) ]
+
+                recur n_ g =
+                    if n_ == 0 then
+                        g
+
+                    else
+                        Random.andThen
+                            (\( results, { prefixs, mains, suffix1s, suffix2s } ) ->
+                                recur (n_ - 1) <|
+                                    Random.map4
+                                        (\( p, ps ) ( m, ms ) ( s1, s1s ) ( s2, s2s ) ->
+                                            ( String.join "" [ p, m, s1, s2 ] :: results
+                                            , NameOptions ps ms s1s s2s
+                                            )
+                                        )
+                                        (sometimesTakeName 0.5 prefixs)
+                                        (sometimesTakeName 1 mains)
+                                        (sometimesTakeName 0.5 suffix1s)
+                                        (sometimesTakeName 0.5 suffix2s)
+                            )
+                            g
+            in
+            Random.pair
+                (Random.constant [])
+                (Random.map4 NameOptions
+                    (Random.shuffle nameOptions.prefixs)
+                    (Random.shuffle nameOptions.mains)
+                    (Random.shuffle nameOptions.suffix1s)
+                    (Random.shuffle nameOptions.suffix2s)
+                )
+                |> recur n
+                |> Random.map Tuple.first
+
+        monsters =
+            Random.map2
+                (List.map2 Character)
+                (randomNames monsterNameOptions)
+                monsterLevels
+
+        heros =
+            Random.map2
+                (List.map2 Character)
+                (randomNames heroNameOptions)
+                heroLevels
+    in
+    Random.map2 LineUp heros monsters
 
 
 getDescription : NarrativeParser.Config MyEntity -> WorldModel.ID -> MyWorldModel -> String
@@ -113,11 +284,22 @@ type alias ParsedEntity =
     Result SyntaxHelpers.ParseErrors ( WorldModel.ID, MyEntity )
 
 
+type alias Character =
+    { name : String, level : Int }
+
+
+type alias LineUp =
+    { heros : List Character
+    , monsters : List Character
+    }
+
+
 type Msg
     = InteractWith WorldModel.ID
     | UpdateDebugSearchText String
     | AddEntities (EntityParser.ParsedWorldModel EntityFields)
     | AddRules (RuleParser.ParsedRules RuleFields)
+    | Randomize LineUp
 
 
 type alias EntitySpec =
@@ -252,6 +434,13 @@ update msg model =
                                     update (InteractWith "start") { m | started = True }
                            )
 
+        Randomize lineUp ->
+            let
+                x =
+                    Debug.log "lineUp" lineUp
+            in
+            ( model, Cmd.none )
+
 
 query : String -> MyWorldModel -> List ( WorldModel.ID, MyEntity )
 query q worldModel =
@@ -268,52 +457,43 @@ assert q worldModel =
 view : Model -> Html Msg
 view model =
     let
-        currentLocation =
-            WorldModel.getLink "PLAYER" "current_location" model.worldModel
+        heros =
+            query "*.hero.!fighting.!defeated" model.worldModel
 
-        inventory =
-            query "*.item.current_location=PLAYER" model.worldModel
+        monsters =
+            query "*.monster.!fighting.!defeated" model.worldModel
 
-        locations =
-            query "*.location" model.worldModel
-                |> List.filter (\( locationID, _ ) -> Just locationID /= currentLocation)
+        fightingHero =
+            query "*.hero.fighting" model.worldModel
 
-        items =
-            query "*.item.current_location=(link PLAYER.current_location)" model.worldModel
+        fightingMonster =
+            query "*.monster.fighting" model.worldModel
 
-        characters =
-            query "*.character.current_location=(link PLAYER.current_location)" model.worldModel
+        defeated =
+            query "*.defeated" model.worldModel
 
-        section heading entities =
-            span []
-                [ b [] [ text heading ]
-                , ul [] entities
-                ]
+        listOf =
+            ul [] << List.map (\( _, { name } ) -> li [] [ text name ])
 
-        ifNotEmpty l v =
-            if List.isEmpty l then
-                text ""
-
-            else
-                v l
+        firstOf =
+            List.head
+                >> Maybe.map (\( _, { name } ) -> div [] [ text name ])
+                >> Maybe.withDefault (div [] [ text "empty" ])
     in
     div [ style "width" "90%", style "margin" "auto" ] <|
         [ NarrativeEngine.Debug.debugBar UpdateDebugSearchText model.worldModel model.debug
-        , div [ style "display" "flex" ]
-            [ div [ style "flex" "1 0 auto" ]
-                [ currentLocation
-                    |> Maybe.map
-                        (\l ->
-                            section "Current location" <| [ entityView ( l, { name = getName l model.worldModel } ) ]
-                        )
-                    |> Maybe.withDefault (text "")
-                , ifNotEmpty locations (section "Other locations" << List.map entityView)
-                , ifNotEmpty items (section "Nearby items" << List.map entityView)
-                , ifNotEmpty characters (section "Nearby characters" << List.map entityView)
-                , ifNotEmpty inventory (section "Inventory" << List.map entityView)
+        , div [ class "pure-g" ]
+            [ div [ class "pure-u-1-4" ] [ h3 [] [ text "Heros" ], listOf heros ]
+            , div [ class "pure-u-1-2" ]
+                [ div [ class "pure-g" ]
+                    [ div [ class "pure-u-1-2" ] [ firstOf fightingHero ]
+                    , div [ class "pure-u-1-2" ] [ firstOf fightingMonster ]
+                    ]
                 ]
-            , div [ style "flex" "1 0 50%", style "padding" "0 5em" ]
-                [ text model.story ]
+            , div [ class "pure-u-1-4" ] [ h3 [] [ text "Monsters" ], listOf monsters ]
+            ]
+        , div [ class "pure-g" ]
+            [ div [ class "pure-u" ] [ listOf defeated ]
             ]
         ]
 
