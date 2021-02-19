@@ -13,6 +13,8 @@ const { Elm } = require("./Main");
 var app = Elm.Main.init({ flags: 6 });
 
 // fetch and import manifest data
+// not used because manifest is generated progrmatically
+/*
 manifestRef.onSnapshot(
     (snapshot) => {
         // TODO check if change type is "remove" and respond accordingly
@@ -26,6 +28,7 @@ manifestRef.onSnapshot(
     },
     (e) => console.error(e)
 );
+*/
 
 // fetch and import rules data
 rulesRef.onSnapshot(

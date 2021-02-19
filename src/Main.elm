@@ -6,7 +6,7 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick)
 import NarrativeEngine.Core.Rules as Rules
-import NarrativeEngine.Core.WorldModel as WorldModel
+import NarrativeEngine.Core.WorldModel as WorldModel exposing (addTag, emptyLinks, emptyStats, emptyTags, setStat)
 import NarrativeEngine.Debug
 import NarrativeEngine.Syntax.EntityParser as EntityParser
 import NarrativeEngine.Syntax.Helpers as SyntaxHelpers
@@ -101,40 +101,59 @@ monsterNameOptions =
         , "Resurrected "
         , "Deranged "
         , "Flying "
+        , "Scaly "
+        , "Sleepy "
         , "Poisonous "
         , "Cursed "
+        , "Partly invisible "
         , "Giant "
         , "Uncommon "
         , "Misunderstood "
         , "Dyslexic "
+        , "Seemingly innocent "
+        , "Mutant "
+        , "Undead "
+        , "Mildly annoying "
+        , "Screaming "
         ]
     , mains =
         [ "Imp"
         , "Snail"
         , "Spider"
-        , "Rat"
+        , "Rodent"
         , "Sock puppet"
         , "Bob the Blob"
         , "Clown"
         , "Newt"
         , "Politician"
         , "Teddy-bear"
+        , "Witch"
+        , "Zombie"
+        , "Hooligan"
+        , "Telemarketer"
         ]
     , suffix1s =
         [ " of doom"
-        , " the meek"
-        , " the terrible"
         , " of disreputable company"
-        , " the feared"
-        , " the mildly annoying"
+        , " from Hell"
+        , " infected with scurvy"
+        , " of limited intellect"
+        , " from the house next door"
+        , " from your nightmare"
         ]
     , suffix2s =
         [ " with 1000 eyes"
         , " with no face"
         , " with secret powers"
-        , ", of limited intellect"
+        , " with nefarious intent"
         , ", armed to the teeth"
         , ", without grace"
+        , ", blinded with rage"
+        , ", with glowing tentacles"
+        , ", with a personal vendetta"
+        , ", who hasn't eaten for over a week"
+        , ", who just wants attention"
+        , ", a wanted criminal"
         ]
     }
 
@@ -146,7 +165,6 @@ heroNameOptions =
         , "Constable "
         , "Young "
         , "Above-average "
-        , "Undisputed "
         , "Untrained "
         , "Angry "
         , "Crazy "
@@ -164,26 +182,36 @@ heroNameOptions =
         , "Kennith"
         , "Malinda"
         , "Anastasia"
-        , "Max \"the Axe\""
-        , "\"Bob next door\""
+        , "Billingford"
+        , "Daniel"
+        , "Lady Ferrington"
+        , "\"Max the Axe\""
+        , "Eliza"
         ]
     , suffix1s =
-        [ " the disgraced"
-        , " the undisputed"
-        , " the bashful"
-        , " the terrible"
-        , " the forgetful"
-        , " the unknown"
-        , " the dim-witted"
-        , " the third"
-        , " the unknown"
+        [ " the Disgraced"
+        , " the Undisputed"
+        , " the Bashful"
+        , " the Terrible"
+        , " the Forgetful"
+        , " the Unknown"
+        , " the Dim-witted"
+        , " the Third"
+        , " the Unknown"
+        , " the Outcast"
+        , " the Wonderful"
         ]
     , suffix2s =
         [ ", from far, far away"
-        , ", son of Agathar"
+        , "  and a team of trained ferrets"
+        , ", of royal descent"
         , ", of recent notoriety"
         , ", of unparalleled beauty"
         , ", of questionable antics"
+        , ", trained by monks"
+        , ", who took one semester of \"Monster Hunting 101\""
+        , ", wielding \"Fighting Monsters for Dummies\""
+        , ", who just wants everyone to get along"
         ]
     }
 
@@ -223,8 +251,8 @@ makeLineUp n =
                                         )
                                         (sometimesTakeName 0.5 prefixs)
                                         (sometimesTakeName 1 mains)
-                                        (sometimesTakeName 0.5 suffix1s)
-                                        (sometimesTakeName 0.5 suffix2s)
+                                        (sometimesTakeName 0.3 suffix1s)
+                                        (sometimesTakeName 0.2 suffix2s)
                             )
                             g
             in
@@ -436,10 +464,27 @@ update msg model =
 
         Randomize lineUp ->
             let
-                x =
-                    Debug.log "lineUp" lineUp
+                makeCharacter tag =
+                    List.map
+                        (\{ name, level } ->
+                            ( name
+                            , { tags = emptyTags
+                              , stats = emptyStats
+                              , links = emptyLinks
+                              , name = name
+                              , description = ""
+                              }
+                                |> addTag tag
+                            )
+                        )
+
+                entities =
+                    []
+                        ++ makeCharacter "hero" lineUp.heros
+                        ++ makeCharacter "monster" lineUp.monsters
+                        |> Dict.fromList
             in
-            ( model, Cmd.none )
+            ( { model | worldModel = Dict.union entities model.worldModel }, Cmd.none )
 
 
 query : String -> MyWorldModel -> List ( WorldModel.ID, MyEntity )
