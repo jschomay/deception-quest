@@ -497,8 +497,8 @@ update msg model =
                 , query "*.hero.!fighting.!defeated.!victorious" model.worldModel
                 ]
             of
-                -- no hero fighting, no heros left, round lost, restart lineup
-                [ _, [], _, [] ] ->
+                -- no hero fighting, no heros left, monster still standing, round lost, restart lineup
+                [ monster_fighting :: _, [], _, [] ] ->
                     let
                         x =
                             Debug.log "" "round lost, try again"
@@ -513,7 +513,7 @@ update msg model =
                     ( { model | worldModel = worldModel }, after 1000 Tick )
 
                 -- no monster fighting, no monsters left, round won, level up, queue start round
-                [ [], _, [], _ ] ->
+                [ _, _, [], [] ] ->
                     let
                         x =
                             Debug.log "" "you win!  level up"
@@ -532,7 +532,7 @@ update msg model =
                         worldModel =
                             updateWorldModel [ monster_up_next ++ ".fighting" ] model.worldModel
                     in
-                    ( { model | worldModel = worldModel }, after 1000 Tick )
+                    ( { model | worldModel = worldModel }, after 100 Tick )
 
                 -- monster & hero fighting, determine outcome
                 [ ( monster_fighting, _ ) :: _, ( hero_fighting, _ ) :: _, _, _ ] ->
