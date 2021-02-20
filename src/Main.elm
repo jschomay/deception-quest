@@ -6,15 +6,17 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick)
 import NarrativeEngine.Core.Rules as Rules
-import NarrativeEngine.Core.WorldModel as WorldModel exposing (addTag, emptyLinks, emptyStats, emptyTags, setStat)
+import NarrativeEngine.Core.WorldModel as WorldModel exposing (addTag, applyChanges, emptyLinks, emptyStats, emptyTags, getStat, setStat)
 import NarrativeEngine.Debug
 import NarrativeEngine.Syntax.EntityParser as EntityParser
 import NarrativeEngine.Syntax.Helpers as SyntaxHelpers
 import NarrativeEngine.Syntax.NarrativeParser as NarrativeParser
 import NarrativeEngine.Syntax.RuleParser as RuleParser
+import Process
 import Random
 import Random.Extra as Random
 import Random.List as Random
+import Task
 
 
 type alias EntityFields =
@@ -34,11 +36,6 @@ type alias MyEntity =
 
 type alias MyWorldModel =
     Dict WorldModel.ID MyEntity
-
-
-toEntity : String -> String -> String -> ( String, EntityFields )
-toEntity entityString name description =
-    ( entityString, { name = name, description = description } )
 
 
 type alias RuleFields =
@@ -65,10 +62,11 @@ type alias Model =
     { parseErrors : Maybe SyntaxHelpers.ParseErrors
     , worldModel : MyWorldModel
     , rules : MyRules
-    , started : Bool
     , story : String
     , ruleCounts : Dict String Int
     , debug : NarrativeEngine.Debug.State
+    , chooseHero : Bool
+    , lineUpCount : Int
     }
 
 
@@ -77,12 +75,13 @@ initialModel =
     ( { parseErrors = Nothing
       , worldModel = Dict.empty
       , rules = Dict.empty
-      , started = False
       , story = ""
       , ruleCounts = Dict.empty
       , debug = NarrativeEngine.Debug.init
+      , chooseHero = False
+      , lineUpCount = 3
       }
-    , Random.generate Randomize (makeLineUp 5)
+    , Random.generate StartRound (makeLineUp 3)
     )
 
 
@@ -327,7 +326,9 @@ type Msg
     | UpdateDebugSearchText String
     | AddEntities (EntityParser.ParsedWorldModel EntityFields)
     | AddRules (RuleParser.ParsedRules RuleFields)
-    | Randomize LineUp
+    | StartRound LineUp
+    | Tick
+    | HeroSelected WorldModel.ID
 
 
 type alias EntitySpec =
@@ -453,21 +454,22 @@ update msg model =
                     ( { model | parseErrors = Just errors }, Cmd.none )
 
                 Ok newRules ->
-                    { model | parseErrors = Nothing, rules = Dict.union newRules model.rules }
-                        |> (\m ->
-                                if m.started then
-                                    ( m, Cmd.none )
+                    ( { model | parseErrors = Nothing, rules = Dict.union newRules model.rules }, Cmd.none )
 
-                                else
-                                    update (InteractWith "start") { m | started = True }
-                           )
-
-        Randomize lineUp ->
+        StartRound lineUp ->
             let
+                toId name =
+                    name
+                        |> String.replace " " "_"
+                        |> String.replace "," "_"
+                        |> String.replace "'" "_"
+                        |> String.replace "-" "_"
+                        |> String.replace "\"" "_"
+
                 makeCharacter tag =
                     List.map
                         (\{ name, level } ->
-                            ( name
+                            ( toId name
                             , { tags = emptyTags
                               , stats = emptyStats
                               , links = emptyLinks
@@ -475,6 +477,7 @@ update msg model =
                               , description = ""
                               }
                                 |> addTag tag
+                                |> setStat "level" level
                             )
                         )
 
@@ -484,7 +487,145 @@ update msg model =
                         ++ makeCharacter "monster" lineUp.monsters
                         |> Dict.fromList
             in
-            ( { model | worldModel = Dict.union entities model.worldModel }, Cmd.none )
+            ( { model | worldModel = entities }, after 1000 Tick )
+
+        Tick ->
+            case
+                [ query "*.monster.fighting" model.worldModel
+                , query "*.hero.fighting" model.worldModel
+                , query "*.monster.!fighting.!defeated" model.worldModel
+                , query "*.hero.!fighting.!defeated.!victorious" model.worldModel
+                ]
+            of
+                -- no hero fighting, no heros left, round lost, restart lineup
+                [ _, [], _, [] ] ->
+                    let
+                        x =
+                            Debug.log "" "round lost, try again"
+
+                        worldModel =
+                            updateWorldModel
+                                [ "(*.hero).-fighting.-defeated.-victorious"
+                                , "(*.monster).-fighting.-defeated"
+                                ]
+                                model.worldModel
+                    in
+                    ( { model | worldModel = worldModel }, after 1000 Tick )
+
+                -- no monster fighting, no monsters left, round won, level up, queue start round
+                [ [], _, [], _ ] ->
+                    let
+                        x =
+                            Debug.log "" "you win!  level up"
+                    in
+                    -- TODO build in a delay
+                    ( { model | lineUpCount = model.lineUpCount + 1 }
+                    , Random.generate StartRound (makeLineUp (model.lineUpCount + 1))
+                    )
+
+                -- no monster fighting, monsters available, monster attacks
+                [ [], _, ( monster_up_next, _ ) :: _, _ ] ->
+                    let
+                        x =
+                            Debug.log "" "a monster attacks"
+
+                        worldModel =
+                            updateWorldModel [ monster_up_next ++ ".fighting" ] model.worldModel
+                    in
+                    ( { model | worldModel = worldModel }, after 1000 Tick )
+
+                -- monster & hero fighting, determine outcome
+                [ ( monster_fighting, _ ) :: _, ( hero_fighting, _ ) :: _, _, _ ] ->
+                    let
+                        x =
+                            Debug.log "" "ready... fight!"
+
+                        ( outcomeMsg, worldModel ) =
+                            Maybe.map2
+                                (\m_level h_level ->
+                                    if m_level > h_level then
+                                        ( "monster wins!"
+                                        , updateWorldModel
+                                            [ hero_fighting ++ ".-fighting.defeated" ]
+                                            model.worldModel
+                                        )
+
+                                    else
+                                        ( "hero is victorious!"
+                                        , updateWorldModel
+                                            [ hero_fighting ++ ".-fighting.victorious"
+                                            , monster_fighting ++ ".-fighting.defeated"
+                                            ]
+                                            model.worldModel
+                                        )
+                                )
+                                (getStat monster_fighting "level" model.worldModel)
+                                (getStat hero_fighting "level" model.worldModel)
+                                |> Maybe.withDefault ( "oops", model.worldModel )
+
+                        y =
+                            Debug.log "" outcomeMsg
+                    in
+                    ( { model | worldModel = worldModel }, after 1000 Tick )
+
+                -- monster fighting & no hero fighting, heros available, queue hero select
+                [ monster_fighting :: _, [], _, hero_up_next :: _ ] ->
+                    let
+                        x =
+                            Debug.log "" "choose a hero to fight"
+                    in
+                    ( { model | chooseHero = True }, Cmd.none )
+
+                other ->
+                    let
+                        x =
+                            Debug.log "unexpected match" other
+                    in
+                    ( model, Cmd.none )
+
+        HeroSelected id ->
+            let
+                worldModel =
+                    updateWorldModel [ id ++ ".fighting" ] model.worldModel
+            in
+            ( { model | worldModel = worldModel, chooseHero = False }, after 1000 Tick )
+
+
+
+-- GAME LOOP
+-- round start, generate heros and monsters, queue monster attacks
+-- monster attacks (no monsters fighting) send monster to fight, wait for pick hero
+-- pick hero (1 monster fighting, no heros) send hero to fight, querue fight
+-- fight (1 monster, 1 hero) compare stats, determine outcome
+-- -- hero wins (hero > monster) monster defeated, hero victorious
+-- -- -- monsters left, queue monster attacks
+-- -- -- no monsters left, queue level up
+-- -- monster wins (monster > hero) hero defeated
+-- -- -- heros left, queue pick hero
+-- -- -- no heros left, queue restart round
+-- restart round, lose text, reset lineup
+-- level up, win text, bonuses, increment lineup count, queue round start
+
+
+after : Float -> Msg -> Cmd Msg
+after ms msg =
+    Task.perform (always msg) <| Process.sleep ms
+
+
+updateWorldModel : List String -> MyWorldModel -> MyWorldModel
+updateWorldModel queries worldModel =
+    let
+        parsedChanges =
+            List.foldr
+                (\q acc ->
+                    RuleParser.parseChanges q
+                        |> Result.map (\c -> c :: acc)
+                        |> Result.withDefault acc
+                )
+                []
+                queries
+    in
+    applyChanges parsedChanges "no trigger" worldModel
 
 
 query : String -> MyWorldModel -> List ( WorldModel.ID, MyEntity )
@@ -503,7 +644,7 @@ view : Model -> Html Msg
 view model =
     let
         heros =
-            query "*.hero.!fighting.!defeated" model.worldModel
+            query "*.hero.!fighting.!defeated.!victorious" model.worldModel
 
         monsters =
             query "*.monster.!fighting.!defeated" model.worldModel
@@ -517,28 +658,44 @@ view model =
         defeated =
             query "*.defeated" model.worldModel
 
-        listOf =
-            ul [] << List.map (\( _, { name } ) -> li [] [ text name ])
+        victorious =
+            query "*.victorious" model.worldModel
+
+        listOf l maybeMsg =
+            let
+                handler id =
+                    maybeMsg |> Maybe.map (\m -> [ onClick <| m id ]) |> Maybe.withDefault []
+            in
+            ul [] <| List.map (\( id, { name } ) -> li ([] ++ handler id) [ text name ]) l
 
         firstOf =
             List.head
                 >> Maybe.map (\( _, { name } ) -> div [] [ text name ])
                 >> Maybe.withDefault (div [] [ text "empty" ])
+
+        heroHandler =
+            if model.chooseHero then
+                Just HeroSelected
+
+            else
+                Nothing
     in
     div [ style "width" "90%", style "margin" "auto" ] <|
-        [ NarrativeEngine.Debug.debugBar UpdateDebugSearchText model.worldModel model.debug
-        , div [ class "pure-g" ]
-            [ div [ class "pure-u-1-4" ] [ h3 [] [ text "Heros" ], listOf heros ]
+        -- [ NarrativeEngine.Debug.debugBar UpdateDebugSearchText model.worldModel model.debug
+        [ div [ class "pure-g" ]
+            [ div [ class "pure-u-1-4" ] [ h3 [] [ text "Heros" ], listOf heros heroHandler ]
             , div [ class "pure-u-1-2" ]
-                [ div [ class "pure-g" ]
+                [ h3 [] [ text "Current battle" ]
+                , div [ class "pure-g" ]
                     [ div [ class "pure-u-1-2" ] [ firstOf fightingHero ]
                     , div [ class "pure-u-1-2" ] [ firstOf fightingMonster ]
                     ]
                 ]
-            , div [ class "pure-u-1-4" ] [ h3 [] [ text "Monsters" ], listOf monsters ]
+            , div [ class "pure-u-1-4" ] [ h3 [] [ text "Monsters" ], listOf monsters Nothing ]
             ]
+        , h3 [] [ text "Previous battles" ]
         , div [ class "pure-g" ]
-            [ div [ class "pure-u" ] [ listOf defeated ]
+            [ div [ class "pure-u" ] [ listOf (defeated ++ victorious) Nothing ]
             ]
         ]
 
