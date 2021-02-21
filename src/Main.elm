@@ -62,11 +62,12 @@ type alias Model =
     { parseErrors : Maybe SyntaxHelpers.ParseErrors
     , worldModel : MyWorldModel
     , rules : MyRules
-    , story : String
     , ruleCounts : Dict String Int
     , debug : NarrativeEngine.Debug.State
     , chooseHero : Bool
     , lineUpCount : Int
+    , story : String
+    , continueButton : Maybe ( String, Msg )
     }
 
 
@@ -75,11 +76,12 @@ initialModel =
     ( { parseErrors = Nothing
       , worldModel = Dict.empty
       , rules = Dict.empty
-      , story = ""
       , ruleCounts = Dict.empty
       , debug = NarrativeEngine.Debug.init
       , chooseHero = False
       , lineUpCount = 3
+      , story = ""
+      , continueButton = Nothing
       }
     , Random.generate StartRound (makeLineUp 3)
     )
@@ -138,7 +140,7 @@ monsterNameOptions =
         , " infected with scurvy"
         , " of limited intellect"
         , " from the house next door"
-        , " from your nightmare"
+        , " from your nightmares"
         ]
     , suffix2s =
         [ " with 1000 eyes"
@@ -272,13 +274,13 @@ makeLineUp n =
                 (randomNames monsterNameOptions)
                 monsterLevels
 
-        heros =
+        heroes =
             Random.map2
                 (List.map2 Character)
                 (randomNames heroNameOptions)
                 heroLevels
     in
-    Random.map2 LineUp heros monsters
+    Random.map2 LineUp heroes monsters
 
 
 getDescription : NarrativeParser.Config MyEntity -> WorldModel.ID -> MyWorldModel -> String
@@ -316,7 +318,7 @@ type alias Character =
 
 
 type alias LineUp =
-    { heros : List Character
+    { heroes : List Character
     , monsters : List Character
     }
 
@@ -329,6 +331,8 @@ type Msg
     | StartRound LineUp
     | Tick
     | HeroSelected WorldModel.ID
+    | ResetRound
+    | Queue (Cmd Msg)
 
 
 type alias EntitySpec =
@@ -415,7 +419,9 @@ update msg model =
                         , story =
                             narrative
                                 |> NarrativeParser.parse (makeConfig trigger matchedRuleID model.ruleCounts model.worldModel)
-                                |> String.join "\n\n"
+                                |> String.join """
+
+                                """
                         , ruleCounts = Dict.update matchedRuleID (Maybe.map ((+) 1) >> Maybe.withDefault 1 >> Just) model.ruleCounts
                         , debug =
                             model.debug
@@ -456,6 +462,9 @@ update msg model =
                 Ok newRules ->
                     ( { model | parseErrors = Nothing, rules = Dict.union newRules model.rules }, Cmd.none )
 
+        Queue cmd ->
+            ( model, cmd )
+
         StartRound lineUp ->
             let
                 toId name =
@@ -483,11 +492,34 @@ update msg model =
 
                 entities =
                     []
-                        ++ makeCharacter "hero" lineUp.heros
+                        ++ makeCharacter "hero" lineUp.heroes
                         ++ makeCharacter "monster" lineUp.monsters
                         |> Dict.fromList
             in
-            ( { model | worldModel = entities }, after 1000 Tick )
+            ( { model
+                | worldModel = entities
+                , story = "Your village is under threat from invading monsters!  You must send your heroes out to fight them off."
+                , continueButton = Just ( "Ready!", Tick )
+              }
+            , Cmd.none
+            )
+
+        ResetRound ->
+            let
+                worldModel =
+                    updateWorldModel
+                        [ "(*.hero).-fighting.-defeated.-victorious"
+                        , "(*.monster).-fighting.-defeated"
+                        ]
+                        model.worldModel
+            in
+            ( { model
+                | worldModel = worldModel
+                , story = ""
+                , continueButton = Nothing
+              }
+            , after 2000 Tick
+            )
 
         Tick ->
             case
@@ -497,61 +529,70 @@ update msg model =
                 , query "*.hero.!fighting.!defeated.!victorious" model.worldModel
                 ]
             of
-                -- no hero fighting, no heros left, monster still standing, round lost, restart lineup
-                [ monster_fighting :: _, [], _, [] ] ->
-                    let
-                        x =
-                            Debug.log "" "round lost, try again"
-
-                        worldModel =
-                            updateWorldModel
-                                [ "(*.hero).-fighting.-defeated.-victorious"
-                                , "(*.monster).-fighting.-defeated"
-                                ]
-                                model.worldModel
-                    in
-                    ( { model | worldModel = worldModel }, after 1000 Tick )
-
                 -- no monster fighting, no monsters left, round won, level up, queue start round
-                [ _, _, [], [] ] ->
-                    let
-                        x =
-                            Debug.log "" "you win!  level up"
-                    in
-                    -- TODO build in a delay
-                    ( { model | lineUpCount = model.lineUpCount + 1 }
-                    , Random.generate StartRound (makeLineUp (model.lineUpCount + 1))
+                -- Important - this must come before the round lost check!
+                [ [], _, [], _ ] ->
+                    ( { model
+                        | lineUpCount = model.lineUpCount + 1
+                        , story = """You fought off all the monsters!
+
+                        But don't celebrate just yet... looks like trouble brewing on the horizon."""
+                        , continueButton = Just <| ( "Get ready...", Queue <| Random.generate StartRound (makeLineUp (model.lineUpCount + 1)) )
+                      }
+                    , Cmd.none
                     )
 
-                -- no monster fighting, monsters available, monster attacks
-                [ [], _, ( monster_up_next, _ ) :: _, _ ] ->
-                    let
-                        x =
-                            Debug.log "" "a monster attacks"
+                -- no hero fighting, no heroes left, round lost, restart lineup
+                [ _, [], _, [] ] ->
+                    ( { model
+                        | story = """All your heroes have fallen, but monsters still remain.  You have lost the battle.
 
+                        However, you know a little more about each monster's strength now, and you can turn back the clock and try again."""
+                        , continueButton = Just ( "Try again", ResetRound )
+                      }
+                    , Cmd.none
+                    )
+
+                -- no monster fighting, monsters available, heros available monster attacks
+                [ [], _, ( monster_up_next, _ ) :: _, _ :: _ ] ->
+                    let
                         worldModel =
                             updateWorldModel [ monster_up_next ++ ".fighting" ] model.worldModel
                     in
-                    ( { model | worldModel = worldModel }, after 100 Tick )
+                    ( { model
+                        | worldModel = worldModel
+                        , story = getName monster_up_next model.worldModel ++ " attacks!  Choose a hero to join the fight."
+                        , continueButton = Nothing
+                        , chooseHero = True
+                      }
+                    , Cmd.none
+                    )
+
+                -- monster still fighting, no hero fighting, heroes left, choose hero
+                [ ( monster_fighting, _ ) :: _, [], _, _ :: _ ] ->
+                    ( { model
+                        | story = getName monster_fighting model.worldModel ++ " is still standing.  Try another hero."
+                        , continueButton = Nothing
+                        , chooseHero = True
+                      }
+                    , Cmd.none
+                    )
 
                 -- monster & hero fighting, determine outcome
                 [ ( monster_fighting, _ ) :: _, ( hero_fighting, _ ) :: _, _, _ ] ->
                     let
-                        x =
-                            Debug.log "" "ready... fight!"
-
-                        ( outcomeMsg, worldModel ) =
+                        ( outcome, worldModel ) =
                             Maybe.map2
                                 (\m_level h_level ->
                                     if m_level > h_level then
-                                        ( "monster wins!"
+                                        ( getName hero_fighting model.worldModel ++ " is defeated!"
                                         , updateWorldModel
                                             [ hero_fighting ++ ".-fighting.defeated" ]
                                             model.worldModel
                                         )
 
                                     else
-                                        ( "hero is victorious!"
+                                        ( getName hero_fighting model.worldModel ++ " is victorious!"
                                         , updateWorldModel
                                             [ hero_fighting ++ ".-fighting.victorious"
                                             , monster_fighting ++ ".-fighting.defeated"
@@ -562,49 +603,42 @@ update msg model =
                                 (getStat monster_fighting "level" model.worldModel)
                                 (getStat hero_fighting "level" model.worldModel)
                                 |> Maybe.withDefault ( "oops", model.worldModel )
-
-                        y =
-                            Debug.log "" outcomeMsg
                     in
-                    ( { model | worldModel = worldModel }, after 1000 Tick )
+                    ( { model
+                        | worldModel = worldModel
+                        , story = outcome
+                        , continueButton = Nothing
+                      }
+                    , after 2000 Tick
+                    )
 
-                -- monster fighting & no hero fighting, heros available, queue hero select
-                [ monster_fighting :: _, [], _, hero_up_next :: _ ] ->
-                    let
-                        x =
-                            Debug.log "" "choose a hero to fight"
-                    in
-                    ( { model | chooseHero = True }, Cmd.none )
-
+                -- shouldn't ever trigger
                 other ->
-                    let
-                        x =
-                            Debug.log "unexpected match" other
-                    in
-                    ( model, Cmd.none )
+                    -- let
+                    --     x =
+                    --         Debug.log "unexpected match" other
+                    -- in
+                    ( { model | story = "Error in game loop!" }, Cmd.none )
 
-        HeroSelected id ->
+        HeroSelected heroId ->
             let
+                attackingMonsterName =
+                    query "*.monster.fighting" model.worldModel
+                        |> List.head
+                        |> Maybe.map (\( id, _ ) -> getName id model.worldModel)
+                        |> Maybe.withDefault "the monster"
+
                 worldModel =
-                    updateWorldModel [ id ++ ".fighting" ] model.worldModel
+                    updateWorldModel [ heroId ++ ".fighting" ] model.worldModel
             in
-            ( { model | worldModel = worldModel, chooseHero = False }, after 1000 Tick )
-
-
-
--- GAME LOOP
--- round start, generate heros and monsters, queue monster attacks
--- monster attacks (no monsters fighting) send monster to fight, wait for pick hero
--- pick hero (1 monster fighting, no heros) send hero to fight, querue fight
--- fight (1 monster, 1 hero) compare stats, determine outcome
--- -- hero wins (hero > monster) monster defeated, hero victorious
--- -- -- monsters left, queue monster attacks
--- -- -- no monsters left, queue level up
--- -- monster wins (monster > hero) hero defeated
--- -- -- heros left, queue pick hero
--- -- -- no heros left, queue restart round
--- restart round, lose text, reset lineup
--- level up, win text, bonuses, increment lineup count, queue round start
+            ( { model
+                | worldModel = worldModel
+                , chooseHero = False
+                , story = ""
+                , continueButton = Nothing
+              }
+            , after 1500 Tick
+            )
 
 
 after : Float -> Msg -> Cmd Msg
@@ -643,7 +677,7 @@ assert q worldModel =
 view : Model -> Html Msg
 view model =
     let
-        heros =
+        heroes =
             query "*.hero.!fighting.!defeated.!victorious" model.worldModel
 
         monsters =
@@ -683,7 +717,7 @@ view model =
     div [ style "width" "90%", style "margin" "auto" ] <|
         -- [ NarrativeEngine.Debug.debugBar UpdateDebugSearchText model.worldModel model.debug
         [ div [ class "pure-g" ]
-            [ div [ class "pure-u-1-4" ] [ h3 [] [ text "Heros" ], listOf heros heroHandler ]
+            [ div [ class "pure-u-1-4" ] [ h3 [] [ text "Heroes" ], listOf heroes heroHandler ]
             , div [ class "pure-u-1-2" ]
                 [ h3 [] [ text "Current battle" ]
                 , div [ class "pure-g" ]
@@ -693,6 +727,8 @@ view model =
                 ]
             , div [ class "pure-u-1-4" ] [ h3 [] [ text "Monsters" ], listOf monsters Nothing ]
             ]
+        , div [] [ text model.story ]
+        , Maybe.map (\( prompt, msg ) -> button [ class "pure-button", onClick msg ] [ text prompt ]) model.continueButton |> Maybe.withDefault (text "")
         , h3 [] [ text "Previous battles" ]
         , div [ class "pure-g" ]
             [ div [ class "pure-u" ] [ listOf (defeated ++ victorious) Nothing ]
