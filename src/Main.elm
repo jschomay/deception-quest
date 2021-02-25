@@ -220,14 +220,26 @@ heroNameOptions =
 makeLineUp : Int -> Random.Generator LineUp
 makeLineUp n =
     let
-        range =
+        levelRange =
             List.range 1 n
 
+        heroImageCount =
+            13
+
+        monsterImageCount =
+            14
+
+        heroImages =
+            List.range 1 heroImageCount |> Random.shuffle
+
+        monsteroImages =
+            List.range 1 monsterImageCount |> Random.shuffle
+
         monsterLevels =
-            range |> List.map ((*) 10) |> Random.shuffle
+            levelRange |> List.map ((*) 10) |> Random.shuffle
 
         heroLevels =
-            range |> List.map ((*) 10 >> (+) 5) |> Random.shuffle
+            levelRange |> List.map ((*) 10 >> (+) 5) |> Random.shuffle
 
         randomNames nameOptions =
             let
@@ -269,16 +281,18 @@ makeLineUp n =
                 |> Random.map Tuple.first
 
         monsters =
-            Random.map2
-                (List.map2 Character)
+            Random.map3
+                (List.map3 Character)
                 (randomNames monsterNameOptions)
                 monsterLevels
+                monsteroImages
 
         heroes =
-            Random.map2
-                (List.map2 Character)
+            Random.map3
+                (List.map3 Character)
                 (randomNames heroNameOptions)
                 heroLevels
+                heroImages
     in
     Random.map2 LineUp heroes monsters
 
@@ -314,7 +328,7 @@ type alias ParsedEntity =
 
 
 type alias Character =
-    { name : String, level : Int }
+    { name : String, level : Int, image : Int }
 
 
 type alias LineUp =
@@ -470,14 +484,14 @@ update msg model =
                 toId name =
                     name
                         |> String.replace " " "_"
-                        |> String.replace "," "_"
+                        |> String.replace "," ""
                         |> String.replace "'" "_"
                         |> String.replace "-" "_"
-                        |> String.replace "\"" "_"
+                        |> String.replace "\"" ""
 
                 makeCharacter tag =
                     List.map
-                        (\{ name, level } ->
+                        (\{ name, level, image } ->
                             ( toId name
                             , { tags = emptyTags
                               , stats = emptyStats
@@ -487,6 +501,7 @@ update msg model =
                               }
                                 |> addTag tag
                                 |> setStat "level" level
+                                |> setStat "image" image
                             )
                         )
 
@@ -695,17 +710,50 @@ view model =
         victorious =
             query "*.victorious" model.worldModel
 
-        listOf l maybeMsg =
-            let
-                handler id =
-                    maybeMsg |> Maybe.map (\m -> [ onClick <| m id ]) |> Maybe.withDefault []
-            in
-            ul [] <| List.map (\( id, { name } ) -> li ([] ++ handler id) [ text name ]) l
+        kindPlural id =
+            if assert (id ++ ".hero") model.worldModel then
+                "heroes"
+
+            else
+                "monsters"
+
+        kind id =
+            if assert (id ++ ".hero") model.worldModel then
+                "hero"
+
+            else
+                "monster"
+
+        imageNum id =
+            getStat id "image" model.worldModel |> Maybe.withDefault 1 |> String.fromInt
+
+        characterList maybeMsg =
+            List.map (characterCard maybeMsg)
+
+        withMaybeMessage id maybeMsg attrs =
+            maybeMsg
+                |> Maybe.map (\m -> (onClick <| m id) :: attrs)
+                |> Maybe.withDefault attrs
+
+        characterCard maybeMsg ( id, { name } ) =
+            div
+                (withMaybeMessage id
+                    maybeMsg
+                    [ classList
+                        [ ( "character", True )
+                        , ( "character-" ++ kind id, True )
+                        , ( "defeated", assert (id ++ ".defeated") model.worldModel )
+                        ]
+                    ]
+                )
+                [ img [ src ("images/" ++ kindPlural id ++ "/" ++ imageNum id ++ ".png") ] []
+                , div [ class "title" ] [ text name ]
+                ]
 
         firstOf =
             List.head
-                >> Maybe.map (\( _, { name } ) -> div [] [ text name ])
-                >> Maybe.withDefault (div [] [ text "empty" ])
+                >> Maybe.map (characterCard Nothing)
+                >> Maybe.withDefault (div [ class "hero-placeholder" ] [])
 
         heroHandler =
             if model.chooseHero then
@@ -713,25 +761,32 @@ view model =
 
             else
                 Nothing
+
+        chooseHero =
+            if model.chooseHero then
+                " choose-hero"
+
+            else
+                ""
     in
-    div [ style "width" "90%", style "margin" "auto" ] <|
+    div [ class "game" ] <|
         -- [ NarrativeEngine.Debug.debugBar UpdateDebugSearchText model.worldModel model.debug
-        [ div [ class "pure-g" ]
-            [ div [ class "pure-u-1-4" ] [ h3 [] [ text "Heroes" ], listOf heroes heroHandler ]
-            , div [ class "pure-u-1-2" ]
-                [ h3 [] [ text "Current battle" ]
-                , div [ class "pure-g" ]
-                    [ div [ class "pure-u-1-2" ] [ firstOf fightingHero ]
-                    , div [ class "pure-u-1-2" ] [ firstOf fightingMonster ]
+        [ div [ class "pure-g top" ]
+            [ div [ class <| "pure-u-1-4 characters characters-heroes" ++ chooseHero ] (characterList heroHandler heroes)
+            , div [ class "pure-u-1-2 " ]
+                [ div [ class "pure-g battle" ]
+                    [ div [ class "pure-u-1-2 fighting-zone" ] [ firstOf fightingHero ]
+                    , div [ class "pure-u-1-2 fighting-zone" ] [ firstOf fightingMonster ]
+                    ]
+                , div [ class "story" ]
+                    [ p [] [ text model.story ]
+                    , Maybe.map (\( prompt, msg ) -> button [ class "pure-button button-primary", onClick msg ] [ text prompt ]) model.continueButton |> Maybe.withDefault (text "")
                     ]
                 ]
-            , div [ class "pure-u-1-4" ] [ h3 [] [ text "Monsters" ], listOf monsters Nothing ]
+            , div [ class "pure-u-1-4 characters characters-monsters" ] (characterList Nothing monsters)
             ]
-        , div [] [ text model.story ]
-        , Maybe.map (\( prompt, msg ) -> button [ class "pure-button", onClick msg ] [ text prompt ]) model.continueButton |> Maybe.withDefault (text "")
-        , h3 [] [ text "Previous battles" ]
-        , div [ class "pure-g" ]
-            [ div [ class "pure-u" ] [ listOf (defeated ++ victorious) Nothing ]
+        , div [ class "pure-g bottom" ]
+            [ div [ class "pure-u previous-battles" ] (characterList Nothing (defeated ++ victorious))
             ]
         ]
 
