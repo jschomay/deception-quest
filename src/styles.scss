@@ -7,6 +7,25 @@ $light-color: rgb(255,236,196);
 $gradient-dark: radial-gradient(circle, $secondary-color 0%, $base-color 100%);
 $gradient-light: radial-gradient(circle, $light-color 0%, $base-color 100%);
 $shadow: 1px 1px 3px 1px rgba(0,0,0,0.3);
+$shadow-lg: 3px 3px 10px 3px rgba(0,0,0,0.8);
+
+
+@mixin prevent-fout {
+    .wf-loading & { opacity: 0; visibility: none; }
+}
+
+@mixin fade-in {
+    opacity: 1;
+    transition: linear opacity 0.3s;
+}
+
+@keyframes pulse {
+  50% { opacity: 1; }
+}
+
+.box {
+  animation: pulse .5s ease-out 2;
+}
 
 body {
     background: $base-color;
@@ -21,6 +40,58 @@ body {
     background: $base-color;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+}
+
+.title-main-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    position: absolute;
+    height: 1px;
+    width: 100%;
+    z-index: 9;
+    @include fade-in;
+    @include prevent-fout;
+}
+
+.title-main {
+    font-family: 'Grenze Gotisch';
+    top: 10px;
+    font-size: 2.7em;
+    margin: 0;
+    background: $light-color;
+    color: $base-color;
+    border: 1px solid $base-color;
+    box-shadow: $shadow;
+    padding: 0.2em 0.5em 0.4em;;
+    position: relative;
+
+    &:before {
+        content: "";
+        height: 60px;
+        width: 30px;
+        position: absolute;
+        top: 30%;
+        left: -20px;
+        background: inherit;
+        border: inherit;
+        box-shadow: inherit;
+        z-index: -1;
+    }
+    &:after {
+        content: "";
+        display: block;
+        height: 60px;
+        width: 30px;
+        position: absolute;
+        top: 30%;
+        right: -20px;
+        background: inherit;
+        border: inherit;
+        box-shadow: inherit;
+        z-index: -1;
+    }
 }
 
 .top {
@@ -32,20 +103,38 @@ body {
 }
 
 .characters {
-    background:  linear-gradient(90deg, $light-color 0%, $base-color 100%);
-    padding: 20px;
+    background:  linear-gradient(90deg, $highlight-color 0%, $base-color 100%);
     box-sizing: border-box;
     display: flex;
     height: 100%;
     flex-wrap: wrap;
     align-content: flex-start;
     justify-content: flex-start;
+    position: relative;
+
+    &.characters-monsters {
+        background:  linear-gradient(270deg, $highlight-color 0%, $base-color 100%);
+        justify-content: flex-end;
+}
+
+    &:before {
+        content: "";
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        background:  linear-gradient(90deg, $light-color 0%, $base-color 100%);
+    }
+
+    &.select:before { animation: pulse 1.3s ease-in-out infinite; }
+
 
     .character {
+        z-index: 1;
         width: 90px;
         height: 120px;
         border-radius: 8px;
-        border: 4px solid $base-color;
+        border-width: 4px;
 
         img {
             margin: 10px;
@@ -53,24 +142,18 @@ body {
 
         .title {
             border-radius: 3px;
-            font-size: 0.65em;
+            font-size: 0.5em;
             padding: 3px 2px;
         }
     }
 }
 
-.characters-monsters {
-    background:  linear-gradient(270deg, $light-color 0%, $base-color 100%);
-    justify-content: flex-end;
-}
-
 .character {
     box-shadow: $shadow;
-    background: $light-color;
     background: $gradient-light;
     width: 170px;
     height: 225px;
-    border: 5px solid $base-color;
+    border: 5px solid $light-color;
     border-radius: 10px;
     flex: 0 0 auto;
     display: flex;
@@ -78,6 +161,11 @@ body {
     align-items: center;
     justify-content: space-between;
     margin: 10px;
+    opacity: 1;
+    @include prevent-fout;
+    transition: opacity 0.3s, 0.2s, transform 0.1s;
+
+    .select &:hover { transform: scale(1.05) rotate(1deg) }
 
 
     &.character-hero.defeated {
@@ -103,10 +191,11 @@ body {
         align-self: stretch;
         padding: 10px 5px;
         display: block;
-        background: $secondary-color;
+        background: $base-color;
         text-align: center;
-        color: $light-color;
+        color: $highlight-color;
         border-radius: 5px;
+        font-family: 'VT323', sans-serif;
     }
 }
 
@@ -124,8 +213,10 @@ body {
     border-radius: 15px;
     box-sizing: border-box;
     margin: 20px;
-    background:  linear-gradient(180deg, $secondary-color 0%, $base-color 100%);
-    height: 300px;
+    margin-top: 50px;
+    background:  $secondary-color;
+    box-shadow: $shadow;
+    height: 350px;
     padding: 20px;
 }
 
@@ -135,10 +226,26 @@ body {
 }
 
 .story {
-    padding: 40px;
     color: $highlight-color;
-    text-align: center;
+    background: $light-color;
+    padding: 10px 20px;
+    border-radius: 5px;
+    color: $base-color;
+    font-family: 'VT323', sans-serif;
+    font-size: 1.1em;
+    @include fade-in;
+    @include prevent-fout;
+    box-shadow: $shadow;
+
+    p { margin: 10px; }
+
+    .pure-button {
+        position: relative;
+        left: 50%;
+        transform: translateX(-50%);
+    }
 }
+
 
 .button-primary {
     background: $highlight-color;
@@ -155,7 +262,7 @@ body {
         width: 65px;
         height: 90px;
         margin: 5px;
-        border: 3px solid $base-color;
+        border-width: 3px;
         border-radius: 5px;
 
         &.character-hero.defeated {
@@ -172,8 +279,10 @@ body {
 
         .title {
             border-radius: 1px;
-            font-size: 0.5em;
+            font-size: 0.38em;
             padding: 2px 1px;
         }
     }
 }
+
+.hide {display: none;}

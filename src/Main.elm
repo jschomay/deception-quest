@@ -5,6 +5,7 @@ import Dict exposing (Dict)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick)
+import Markdown
 import NarrativeEngine.Core.Rules as Rules
 import NarrativeEngine.Core.WorldModel as WorldModel exposing (addTag, applyChanges, emptyLinks, emptyStats, emptyTags, getStat, setStat)
 import NarrativeEngine.Debug
@@ -433,9 +434,7 @@ update msg model =
                         , story =
                             narrative
                                 |> NarrativeParser.parse (makeConfig trigger matchedRuleID model.ruleCounts model.worldModel)
-                                |> String.join """
-
-                                """
+                                |> String.join "\n\n"
                         , ruleCounts = Dict.update matchedRuleID (Maybe.map ((+) 1) >> Maybe.withDefault 1 >> Just) model.ruleCounts
                         , debug =
                             model.debug
@@ -513,7 +512,7 @@ update msg model =
             in
             ( { model
                 | worldModel = entities
-                , story = "Your village is under threat from invading monsters!  You must send your heroes out to fight them off."
+                , story = "Your village is under attack from invading monsters!  You must send your heroes out to fight them off.\n\n Just one problem - you don't know anyone's strength, so you'll have to figure it out as you go."
                 , continueButton = Just ( "Ready!", Tick )
               }
             , Cmd.none
@@ -530,10 +529,10 @@ update msg model =
             in
             ( { model
                 | worldModel = worldModel
-                , story = ""
+                , story = "The clock rolls back..."
                 , continueButton = Nothing
               }
-            , after 2000 Tick
+            , after 1000 Tick
             )
 
         Tick ->
@@ -549,9 +548,7 @@ update msg model =
                 [ [], _, [], _ ] ->
                     ( { model
                         | lineUpCount = model.lineUpCount + 1
-                        , story = """You fought off all the monsters!
-
-                        But don't celebrate just yet... looks like trouble brewing on the horizon."""
+                        , story = "You fought off all the monsters!\n\nBut don't celebrate just yet... looks like trouble brewing on the horizon."
                         , continueButton = Just <| ( "Get ready...", Queue <| Random.generate StartRound (makeLineUp (model.lineUpCount + 1)) )
                       }
                     , Cmd.none
@@ -560,9 +557,7 @@ update msg model =
                 -- no hero fighting, no heroes left, round lost, restart lineup
                 [ _, [], _, [] ] ->
                     ( { model
-                        | story = """All your heroes have fallen, but monsters still remain.  You have lost the battle.
-
-                        However, you know a little more about each monster's strength now, and you can turn back the clock and try again."""
+                        | story = "All your heroes have fallen, but monsters still remain.  You have lost the battle.\n\nHowever, you have more insight now, and you can try again."
                         , continueButton = Just ( "Try again", ResetRound )
                       }
                     , Cmd.none
@@ -649,7 +644,7 @@ update msg model =
             ( { model
                 | worldModel = worldModel
                 , chooseHero = False
-                , story = ""
+                , story = getName heroId model.worldModel ++ " joins the fight."
                 , continueButton = Nothing
               }
             , after 1500 Tick
@@ -761,25 +756,19 @@ view model =
 
             else
                 Nothing
-
-        chooseHero =
-            if model.chooseHero then
-                " choose-hero"
-
-            else
-                ""
     in
-    div [ class "game" ] <|
+    div [ class "game" ]
         -- [ NarrativeEngine.Debug.debugBar UpdateDebugSearchText model.worldModel model.debug
-        [ div [ class "pure-g top" ]
-            [ div [ class <| "pure-u-1-4 characters characters-heroes" ++ chooseHero ] (characterList heroHandler heroes)
+        [ div [ class "title-main-wrapper" ] [ h3 [ class "title-main" ] [ text "Deduction Quest" ] ]
+        , div [ class "pure-g top" ]
+            [ div [ class "pure-u-1-4 characters characters-heroes", classList [ ( "select", model.chooseHero ) ] ] (characterList heroHandler heroes)
             , div [ class "pure-u-1-2 " ]
                 [ div [ class "pure-g battle" ]
                     [ div [ class "pure-u-1-2 fighting-zone" ] [ firstOf fightingHero ]
                     , div [ class "pure-u-1-2 fighting-zone" ] [ firstOf fightingMonster ]
                     ]
-                , div [ class "story" ]
-                    [ p [] [ text model.story ]
+                , div [ class "story", classList [ ( "hide", String.isEmpty model.story ) ] ]
+                    [ Markdown.toHtml [] model.story
                     , Maybe.map (\( prompt, msg ) -> button [ class "pure-button button-primary", onClick msg ] [ text prompt ]) model.continueButton |> Maybe.withDefault (text "")
                     ]
                 ]
