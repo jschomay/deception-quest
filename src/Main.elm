@@ -347,6 +347,7 @@ type Msg
     | Tick
     | HeroSelected WorldModel.ID
     | ResetRound
+    | ClearBattlefield
     | Queue (Cmd Msg)
 
 
@@ -512,7 +513,7 @@ update msg model =
             in
             ( { model
                 | worldModel = entities
-                , story = "Your village is under attack from invading monsters!  You must send your heroes out to fight them off.\n\n Just one problem - you don't know anyone's strength, so you'll have to figure it out as you go."
+                , story = "Your village is under attack from invading monsters!  You must send out your heroes to fight them off.\n\n Just one problem - you don't know anyone's strengths, so you'll have to figure it out as you go."
                 , continueButton = Just ( "Ready!", Tick )
               }
             , Cmd.none
@@ -537,8 +538,8 @@ update msg model =
 
         Tick ->
             case
-                [ query "*.monster.fighting" model.worldModel
-                , query "*.hero.fighting" model.worldModel
+                [ query "*.monster.fighting.!defeated" model.worldModel
+                , query "*.hero.fighting.!defeated.!victorious" model.worldModel
                 , query "*.monster.!fighting.!defeated" model.worldModel
                 , query "*.hero.!fighting.!defeated.!victorious" model.worldModel
                 ]
@@ -557,7 +558,7 @@ update msg model =
                 -- no hero fighting, no heroes left, round lost, restart lineup
                 [ _, [], _, [] ] ->
                     ( { model
-                        | story = "All your heroes have fallen, but monsters still remain.  You have lost the battle.\n\nHowever, you have more insight now, and you can try again."
+                        | story = "You are out of heroes, but monsters still remain.  You have lost the battle.\n\nHowever, you have more insight now, and you can try again."
                         , continueButton = Just ( "Try again", ResetRound )
                       }
                     , Cmd.none
@@ -578,7 +579,7 @@ update msg model =
                     , Cmd.none
                     )
 
-                -- monster still fighting, no hero fighting, heroes left, choose hero
+                -- monster still fighting, no (undefeated) hero fighting, heroes left, choose hero
                 [ ( monster_fighting, _ ) :: _, [], _, _ :: _ ] ->
                     ( { model
                         | story = getName monster_fighting model.worldModel ++ " is still standing.  Try another hero."
@@ -597,15 +598,15 @@ update msg model =
                                     if m_level > h_level then
                                         ( getName hero_fighting model.worldModel ++ " is defeated!"
                                         , updateWorldModel
-                                            [ hero_fighting ++ ".-fighting.defeated" ]
+                                            [ hero_fighting ++ ".defeated" ]
                                             model.worldModel
                                         )
 
                                     else
                                         ( getName hero_fighting model.worldModel ++ " is victorious!"
                                         , updateWorldModel
-                                            [ hero_fighting ++ ".-fighting.victorious"
-                                            , monster_fighting ++ ".-fighting.defeated"
+                                            [ hero_fighting ++ ".victorious"
+                                            , monster_fighting ++ ".defeated"
                                             ]
                                             model.worldModel
                                         )
@@ -619,7 +620,7 @@ update msg model =
                         , story = outcome
                         , continueButton = Nothing
                       }
-                    , after 2000 Tick
+                    , after 1200 ClearBattlefield
                     )
 
                 -- shouldn't ever trigger
@@ -629,6 +630,16 @@ update msg model =
                     --         Debug.log "unexpected match" other
                     -- in
                     ( { model | story = "Error in game loop!" }, Cmd.none )
+
+        ClearBattlefield ->
+            ( { model
+                | worldModel =
+                    model.worldModel
+                        |> updateWorldModel [ "(*.fighting.victorious).-fighting" ]
+                        |> updateWorldModel [ "(*.fighting.defeated).-fighting" ]
+              }
+            , after 1500 Tick
+            )
 
         HeroSelected heroId ->
             let
@@ -700,10 +711,10 @@ view model =
             query "*.monster.fighting" model.worldModel
 
         defeated =
-            query "*.defeated" model.worldModel
+            query "*.!fighting.defeated" model.worldModel
 
         victorious =
-            query "*.victorious" model.worldModel
+            query "*.!fighting.victorious" model.worldModel
 
         kindPlural id =
             if assert (id ++ ".hero") model.worldModel then
@@ -738,6 +749,7 @@ view model =
                         [ ( "character", True )
                         , ( "character-" ++ kind id, True )
                         , ( "defeated", assert (id ++ ".defeated") model.worldModel )
+                        , ( "victorious", assert (id ++ ".victorious") model.worldModel )
                         ]
                     ]
                 )
@@ -750,6 +762,9 @@ view model =
                 >> Maybe.map (characterCard Nothing)
                 >> Maybe.withDefault (div [ class "hero-placeholder" ] [])
 
+        isStartFight =
+            assert "*.hero.fighting" model.worldModel
+
         heroHandler =
             if model.chooseHero then
                 Just HeroSelected
@@ -761,9 +776,13 @@ view model =
         -- [ NarrativeEngine.Debug.debugBar UpdateDebugSearchText model.worldModel model.debug
         [ div [ class "title-main-wrapper" ] [ h3 [ class "title-main" ] [ text "Deduction Quest" ] ]
         , div [ class "pure-g top" ]
-            [ div [ class "pure-u-1-4 characters characters-heroes", classList [ ( "select", model.chooseHero ) ] ] (characterList heroHandler heroes)
+            [ div
+                [ class "pure-u-1-4 characters characters-heroes"
+                , classList [ ( "select", model.chooseHero ) ]
+                ]
+                (characterList heroHandler heroes)
             , div [ class "pure-u-1-2 " ]
-                [ div [ class "pure-g battle" ]
+                [ div [ class "pure-g battlefield", classList [ ( "fighting", isStartFight ) ] ]
                     [ div [ class "pure-u-1-2 fighting-zone" ] [ firstOf fightingHero ]
                     , div [ class "pure-u-1-2 fighting-zone" ] [ firstOf fightingMonster ]
                     ]
