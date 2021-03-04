@@ -96,7 +96,7 @@ body {
 }
 
 .top {
-    flex: 1 1 auto;
+    flex: 1 1 100%;
     margin-bottom: 10px;
 }
 
@@ -204,6 +204,7 @@ body {
         margin: 30px;
         flex: 1 1 auto;
         image-rendering: crisp-edges;
+        image-rendering: pixelated;
         background-repeat: no-repeat;
         background-size: contain;
         background-position: center center;
@@ -319,7 +320,7 @@ body {
 
         .title {
             border-radius: 1px;
-            font-size: 0.38em;
+            font-size: 6px;
             padding: 2px 1px;
         }
 
