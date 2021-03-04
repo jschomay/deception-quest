@@ -175,7 +175,7 @@ body {
     overflow: hidden;
     @include prevent-fout;
     position: relative;
-    transition: opacity 0.3s, 0.2s, transform 0.4s $ease-back;
+    transition: opacity 0.3s, 0.2s, transform 0.2s $ease-back;
 
     .select &:hover { transform: scale(1.05) rotate(1deg) }
 
@@ -195,6 +195,10 @@ body {
     &.character-monster.defeated { transform: rotate(87deg) translateX(50px); }
 
     &.character-monster .img { transform: scaleX(-1); }
+
+    .battlefield &.character-preview {
+      opacity: 0.5;
+    }
 
     .img {
         margin: 30px;

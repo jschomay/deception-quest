@@ -4,7 +4,7 @@ import Browser
 import Dict exposing (Dict)
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick)
+import Html.Events exposing (onClick, onMouseEnter, onMouseLeave)
 import Markdown
 import NarrativeEngine.Core.Rules as Rules
 import NarrativeEngine.Core.WorldModel as WorldModel exposing (addTag, applyChanges, emptyLinks, emptyStats, emptyTags, getStat, setStat)
@@ -346,6 +346,7 @@ type Msg
     | StartRound LineUp
     | Tick
     | HeroSelected WorldModel.ID
+    | HeroPreview (Maybe WorldModel.ID)
     | ResetRound
     | ClearBattlefield
     | Queue (Cmd Msg)
@@ -650,7 +651,7 @@ update msg model =
                         |> Maybe.withDefault "the monster"
 
                 worldModel =
-                    updateWorldModel [ heroId ++ ".fighting" ] model.worldModel
+                    updateWorldModel [ heroId ++ ".fighting.-preview" ] model.worldModel
             in
             ( { model
                 | worldModel = worldModel
@@ -660,6 +661,20 @@ update msg model =
               }
             , after 1500 Tick
             )
+
+        HeroPreview Nothing ->
+            let
+                worldModel =
+                    updateWorldModel [ "(*.preview).-preview" ] model.worldModel
+            in
+            ( { model | worldModel = worldModel }, Cmd.none )
+
+        HeroPreview (Just id) ->
+            let
+                worldModel =
+                    updateWorldModel [ id ++ ".preview" ] model.worldModel
+            in
+            ( { model | worldModel = worldModel }, Cmd.none )
 
 
 after : Float -> Msg -> Cmd Msg
@@ -707,6 +722,9 @@ view model =
         fightingHero =
             query "*.hero.fighting" model.worldModel
 
+        previewHero =
+            query "*.hero.preview" model.worldModel
+
         fightingMonster =
             query "*.monster.fighting" model.worldModel
 
@@ -733,25 +751,20 @@ view model =
         imageNum id =
             getStat id "image" model.worldModel |> Maybe.withDefault 1 |> String.fromInt
 
-        characterList maybeMsg =
-            List.map (characterCard maybeMsg)
+        characterList attrs =
+            List.map (characterCard attrs)
 
-        withMaybeMessage id maybeMsg attrs =
-            maybeMsg
-                |> Maybe.map (\m -> (onClick <| m id) :: attrs)
-                |> Maybe.withDefault attrs
-
-        characterCard maybeMsg ( id, { name } ) =
+        characterCard attrs ( id, { name } ) =
             div
-                (withMaybeMessage id
-                    maybeMsg
-                    [ classList
-                        [ ( "character", True )
-                        , ( "character-" ++ kind id, True )
-                        , ( "defeated", assert (id ++ ".defeated") model.worldModel )
-                        , ( "victorious", assert (id ++ ".victorious") model.worldModel )
-                        ]
-                    ]
+                (attrs id
+                    ++ [ classList
+                            [ ( "character", True )
+                            , ( "character-" ++ kind id, True )
+                            , ( "character-preview", kind id == "hero" && not (List.isEmpty previewHero) )
+                            , ( "defeated", assert (id ++ ".defeated") model.worldModel )
+                            , ( "victorious", assert (id ++ ".victorious") model.worldModel )
+                            ]
+                       ]
                 )
                 [ div
                     [ class "img"
@@ -764,18 +777,24 @@ view model =
 
         firstOf =
             List.head
-                >> Maybe.map (characterCard Nothing)
+                >> Maybe.map (characterCard noHandlers)
                 >> Maybe.withDefault (div [ class "hero-placeholder" ] [])
 
         isStartFight =
             assert "*.hero.fighting" model.worldModel
 
-        heroHandler =
+        noHandlers =
+            always []
+
+        heroHandlers id =
             if model.chooseHero then
-                Just HeroSelected
+                [ onClick <| HeroSelected id
+                , onMouseEnter <| HeroPreview <| Just id
+                , onMouseLeave <| HeroPreview Nothing
+                ]
 
             else
-                Nothing
+                []
     in
     div [ class "game" ]
         -- [ NarrativeEngine.Debug.debugBar UpdateDebugSearchText model.worldModel model.debug
@@ -785,10 +804,10 @@ view model =
                 [ class "pure-u-1-4 characters characters-heroes"
                 , classList [ ( "select", model.chooseHero ) ]
                 ]
-                (characterList heroHandler heroes)
+                (characterList heroHandlers heroes)
             , div [ class "pure-u-1-2 " ]
                 [ div [ class "pure-g battlefield", classList [ ( "fighting", isStartFight ) ] ]
-                    [ div [ class "pure-u-1-2 fighting-zone" ] [ firstOf fightingHero ]
+                    [ div [ class "pure-u-1-2 fighting-zone" ] [ firstOf (previewHero ++ fightingHero) ]
                     , div [ class "pure-u-1-2 fighting-zone" ] [ firstOf fightingMonster ]
                     ]
                 , div [ class "story", classList [ ( "hide", String.isEmpty model.story ) ] ]
@@ -796,10 +815,10 @@ view model =
                     , Maybe.map (\( prompt, msg ) -> button [ class "pure-button button-primary", onClick msg ] [ text prompt ]) model.continueButton |> Maybe.withDefault (text "")
                     ]
                 ]
-            , div [ class "pure-u-1-4 characters characters-monsters" ] (characterList Nothing monsters)
+            , div [ class "pure-u-1-4 characters characters-monsters" ] (characterList noHandlers monsters)
             ]
         , div [ class "pure-g bottom" ]
-            [ div [ class "pure-u previous-battles" ] (characterList Nothing (defeated ++ victorious))
+            [ div [ class "pure-u previous-battles" ] (characterList noHandlers (defeated ++ victorious))
             ]
         ]
 
