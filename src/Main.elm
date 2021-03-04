@@ -753,7 +753,11 @@ view model =
                         ]
                     ]
                 )
-                [ img [ src ("images/" ++ kindPlural id ++ "/" ++ imageNum id ++ ".png") ] []
+                [ div
+                    [ class "img"
+                    , style "background-image" ("url(images/" ++ kindPlural id ++ "/" ++ imageNum id ++ ".png)")
+                    ]
+                    []
                 , div [ class "title" ] [ text name ]
                 , div [ class "level" ] [ text "?" ]
                 ]

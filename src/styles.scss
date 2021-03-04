@@ -138,7 +138,7 @@ body {
         border-radius: 8px;
         border-width: 4px;
 
-        img {
+        .img {
             margin: 20px;
         }
 
@@ -168,7 +168,7 @@ body {
     flex: 0 0 auto;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     justify-content: space-between;
     margin: 10px;
     opacity: 1;
@@ -194,12 +194,15 @@ body {
 
     &.character-monster.defeated { transform: rotate(87deg) translateX(50px); }
 
-    &.character-monster img { transform: scaleX(-1); }
+    &.character-monster .img { transform: scaleX(-1); }
 
-    img {
-        flex: 1 1 auto;
+    .img {
         margin: 30px;
+        flex: 1 1 auto;
         image-rendering: crisp-edges;
+        background-repeat: no-repeat;
+        background-size: contain;
+        background-position: center center;
 
     }
 
@@ -306,7 +309,7 @@ body {
             transform: rotate(87deg) translateX(20px);
         }
 
-        img {
+        .img {
             margin: 15px;
         }
 
