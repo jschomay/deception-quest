@@ -743,7 +743,11 @@ view model =
             query "*.hero.fighting" model.worldModel
 
         previewHero =
-            query "*.hero.preview" model.worldModel
+            if model.chooseHero then
+                query "*.hero.preview" model.worldModel
+
+            else
+                []
 
         fightingMonster =
             query "*.monster.fighting" model.worldModel
@@ -807,14 +811,15 @@ view model =
             always []
 
         heroHandlers id =
-            if model.chooseHero then
-                [ onClick <| HeroSelected id
-                , onMouseEnter <| HeroPreview <| Just id
-                , onMouseLeave <| HeroPreview Nothing
-                ]
+            [ onMouseEnter <| HeroPreview <| Just id
+            , onMouseLeave <| HeroPreview Nothing
+            ]
+                ++ (if model.chooseHero then
+                        [ onClick <| HeroSelected id ]
 
-            else
-                []
+                    else
+                        []
+                   )
     in
     div [ class "game" ]
         -- [ NarrativeEngine.Debug.debugBar UpdateDebugSearchText model.worldModel model.debug
