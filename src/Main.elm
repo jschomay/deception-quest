@@ -69,6 +69,7 @@ type alias Model =
     , lineUpCount : Int
     , story : String
     , continueButton : Maybe ( String, Msg )
+    , score : Int
     }
 
 
@@ -83,6 +84,7 @@ initialModel =
       , lineUpCount = 3
       , story = ""
       , continueButton = Nothing
+      , score = 5
       }
     , Random.generate StartRound (makeLineUp 3)
     )
@@ -348,6 +350,7 @@ type Msg
     | HeroSelected WorldModel.ID
     | HeroPreview (Maybe WorldModel.ID)
     | ResetRound
+    | ResetGame
     | ClearBattlefield
     | Queue (Cmd Msg)
 
@@ -532,10 +535,14 @@ update msg model =
             ( { model
                 | worldModel = worldModel
                 , story = "The clock rolls back..."
+                , score = model.score - model.lineUpCount
                 , continueButton = Nothing
               }
             , after 1000 Tick
             )
+
+        ResetGame ->
+            initialModel
 
         Tick ->
             case
@@ -558,12 +565,21 @@ update msg model =
 
                 -- no hero fighting, no heroes left, round lost, restart lineup
                 [ _, [], _, [] ] ->
-                    ( { model
-                        | story = "You are out of heroes, but monsters still remain.  You have lost the battle.\n\nHowever, you have more insight now, and you can try again."
-                        , continueButton = Just ( "Try again", ResetRound )
-                      }
-                    , Cmd.none
-                    )
+                    if model.score >= model.lineUpCount then
+                        ( { model
+                            | story = "You are out of heroes, but monsters still remain.  You have lost the battle.\n\nHowever, you have more insight now.  For " ++ String.fromInt model.lineUpCount ++ " HP you can try again."
+                            , continueButton = Just ( "Try again", ResetRound )
+                          }
+                        , Cmd.none
+                        )
+
+                    else
+                        ( { model
+                            | story = "You are out of heroes, but monsters still remain.  You have lost the battle.  You also don't have enough HP left to try again.  You have failed, the monsters win."
+                            , continueButton = Just ( "Restart", ResetGame )
+                          }
+                        , Cmd.none
+                        )
 
                 -- no monster fighting, monsters available, heros available monster attacks
                 [ [], _, ( monster_up_next, _ ) :: _, _ :: _ ] ->
@@ -593,33 +609,36 @@ update msg model =
                 -- monster & hero fighting, determine outcome
                 [ ( monster_fighting, _ ) :: _, ( hero_fighting, _ ) :: _, _, _ ] ->
                     let
-                        ( outcome, worldModel ) =
+                        ( outcome, worldModel, scoreChange ) =
                             Maybe.map2
                                 (\m_level h_level ->
                                     if m_level > h_level then
-                                        ( getName hero_fighting model.worldModel ++ " is defeated!"
+                                        ( getName hero_fighting model.worldModel ++ " is defeated! -1 HP"
                                         , updateWorldModel
                                             [ hero_fighting ++ ".defeated" ]
                                             model.worldModel
+                                        , -1
                                         )
 
                                     else
-                                        ( getName hero_fighting model.worldModel ++ " is victorious!"
+                                        ( getName hero_fighting model.worldModel ++ " is victorious! +1 HP"
                                         , updateWorldModel
                                             [ hero_fighting ++ ".victorious"
                                             , monster_fighting ++ ".defeated"
                                             ]
                                             model.worldModel
+                                        , 1
                                         )
                                 )
                                 (getStat monster_fighting "level" model.worldModel)
                                 (getStat hero_fighting "level" model.worldModel)
-                                |> Maybe.withDefault ( "oops", model.worldModel )
+                                |> Maybe.withDefault ( "error determining winner", model.worldModel, 0 )
                     in
                     ( { model
                         | worldModel = worldModel
                         , story = outcome
                         , continueButton = Nothing
+                        , score = model.score + scoreChange
                       }
                     , after 1200 ClearBattlefield
                     )
@@ -817,15 +836,11 @@ view model =
                 ]
             , div [ class "pure-u-1-4 characters characters-monsters" ] (characterList noHandlers monsters)
             ]
-        , div [ class "pure-g bottom" ]
-            [ div [ class "pure-u previous-battles" ] (characterList noHandlers (defeated ++ victorious))
+        , div [ class "bottom" ]
+            [ div [ class "previous-battles" ] (characterList noHandlers (defeated ++ victorious))
+            , div [ class "hp" ] [ text <| "HP " ++ String.fromInt model.score ]
             ]
         ]
-
-
-entityView : ( WorldModel.ID, { a | name : String } ) -> Html Msg
-entityView ( id, { name } ) =
-    li [ onClick <| InteractWith id, style "cursor" "pointer" ] [ text name ]
 
 
 main : Program () Model Msg

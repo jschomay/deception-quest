@@ -102,6 +102,11 @@ body {
 
 .bottom {
     flex: 0 0 100px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 15px;
+    background:  linear-gradient(180deg, $secondary-color 0%, $base-color 100%);
 }
 
 .characters {
@@ -257,7 +262,7 @@ body {
     background:  $secondary-color;
     box-shadow: $shadow;
     height: 350px;
-    padding: 20px;
+    padding: 40px 20px;
 }
 
 .fighting-zone {
@@ -292,10 +297,6 @@ body {
 }
 
 .previous-battles {
-    width: 100%;
-    height: 100%;
-    border-radius: 15px;
-    background:  linear-gradient(180deg, $secondary-color 0%, $base-color 100%);
     display: flex;
 
     .character {
@@ -334,4 +335,20 @@ body {
     }
 }
 
+.hp {
+  right: 40px;
+  position: relative;
+  color: $light-color;
+  background: $base-color;
+  padding: 3px 10px;
+  font-family: 'VT323', sans-serif;
+  font-size: 1.5em;
+}
+
 .hide {display: none;}
+
+// move elm debugger
+.game + div {
+  bottom: 150px !important;
+  opacity: 0.3;
+}
