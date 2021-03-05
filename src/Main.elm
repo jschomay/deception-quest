@@ -557,7 +557,8 @@ update msg model =
                 [ [], _, [], _ ] ->
                     ( { model
                         | lineUpCount = model.lineUpCount + 1
-                        , story = "You fought off all the monsters!\n\nBut don't celebrate just yet... looks like trouble brewing on the horizon."
+                        , story = "You fought off all the monsters! +" ++ String.fromInt model.lineUpCount ++ "HP\n\nBut don't celebrate just yet... looks like trouble brewing on the horizon."
+                        , score = model.score + model.lineUpCount
                         , continueButton = Just <| ( "Get ready...", Queue <| Random.generate StartRound (makeLineUp (model.lineUpCount + 1)) )
                       }
                     , Cmd.none
