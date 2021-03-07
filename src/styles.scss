@@ -4,6 +4,7 @@ $base-color: rgba(60,44,11,1);
 $secondary-color: rgba(161,115,20,1);
 $highlight-color: #e0b252;
 $light-color: rgb(255,236,196);
+
 $gradient-dark: radial-gradient(circle, $secondary-color 0%, $base-color 100%);
 $gradient-light: radial-gradient(circle, $light-color 0%, $base-color 100%);
 $shadow: 1px 1px 3px 1px rgba(0,0,0,0.3);
@@ -154,11 +155,9 @@ body {
         }
 
         .level {
-            left: 4px;
-            top: 4px;
             font-size: 0.9em;
-            padding: 2px 3px;
-            border-radius: 4px;
+            padding: 0 3px 3px 0;
+            border-radius: 0 0 4px 0;
         }
     }
 }
@@ -229,13 +228,13 @@ body {
     }
 
     .level {
-        color: $highlight-color;
-        background: $secondary-color;
+        color: $base-color;
+        background: $light-color;
         position: absolute;
-        top: 5px;
-        left: 5px;
-        padding: 3px 4px;
-        border-radius: 5px;
+        top: px;
+        left: px;
+        padding: 0 5px 5px 0;
+        border-radius: 0 0 15px 0;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -326,11 +325,9 @@ body {
         }
 
         .level {
-            left: 3px;
-            top: 3px;
             font-size: 0.7em;
-            padding: 1px 2px;
-            border-radius: 3px;
+            padding: 0 2px 2px 0;
+            border-radius: 0 0 8px 0;
         }
     }
 }
@@ -375,11 +372,9 @@ body {
         }
 
         .level {
-            left: 3px;
-            top: 3px;
             font-size: 0.7em;
-            padding: 1px 2px;
-            border-radius: 3px;
+            padding: 0 2px 2px 0;
+            border-radius: 0 0 5px 0;
         }
     }
 }
