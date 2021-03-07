@@ -335,6 +335,55 @@ body {
     }
 }
 
+.battle-history {
+    color: $base-color;
+    background: $highlight-color;
+    padding: 5px 8px;
+    border-radius: 3px;
+    z-index: 9;
+    box-shadow: $shadow;
+    position: relative;
+    left: 50px;
+
+    h3 {
+      font-family: 'VT323', sans-serif;
+      font-weight: normal;
+    }
+
+    .history-characters {
+      display: flex;
+    }
+
+    .character {
+        width: 65px;
+        height: 90px;
+        margin: 5px;
+        border-width: 3px;
+        border-radius: 5px;
+        transition: none;
+        animation: none !important;
+        transform: none !important;
+
+        .img {
+            margin: 15px;
+        }
+
+        .title {
+            border-radius: 1px;
+            font-size: 6px;
+            padding: 2px 1px;
+        }
+
+        .level {
+            left: 3px;
+            top: 3px;
+            font-size: 0.7em;
+            padding: 1px 2px;
+            border-radius: 3px;
+        }
+    }
+}
+
 .hp {
   right: 40px;
   position: relative;

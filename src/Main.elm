@@ -17,6 +17,7 @@ import Process
 import Random
 import Random.Extra as Random
 import Random.List as Random
+import Set exposing (Set)
 import Task
 
 
@@ -70,6 +71,7 @@ type alias Model =
     , story : String
     , continueButton : Maybe ( String, Msg )
     , score : Int
+    , battleHistory : Dict WorldModel.ID { beat : Set WorldModel.ID, lost : Set WorldModel.ID }
     }
 
 
@@ -84,7 +86,8 @@ initialModel =
       , lineUpCount = 3
       , story = ""
       , continueButton = Nothing
-      , score = 5
+      , score = 10
+      , battleHistory = Dict.empty
       }
     , Random.generate StartRound (makeLineUp 3)
     )
@@ -610,39 +613,50 @@ update msg model =
                 -- monster & hero fighting, determine outcome
                 [ ( monster_fighting, _ ) :: _, ( hero_fighting, _ ) :: _, _, _ ] ->
                     let
-                        ( outcome, worldModel, scoreChange ) =
+                        recordVictory =
+                            Dict.update hero_fighting
+                                (Maybe.map (\h -> Just { h | beat = Set.insert monster_fighting h.beat })
+                                    >> Maybe.withDefault (Just { beat = Set.singleton monster_fighting, lost = Set.empty })
+                                )
+
+                        recordLoss =
+                            Dict.update hero_fighting
+                                (Maybe.map (\h -> Just { h | lost = Set.insert monster_fighting h.lost })
+                                    >> Maybe.withDefault (Just { lost = Set.singleton monster_fighting, beat = Set.empty })
+                                )
+
+                        newModel =
                             Maybe.map2
                                 (\m_level h_level ->
                                     if m_level > h_level then
-                                        ( getName hero_fighting model.worldModel ++ " is defeated! -1 HP"
-                                        , updateWorldModel
-                                            [ hero_fighting ++ ".defeated" ]
-                                            model.worldModel
-                                        , -1
-                                        )
+                                        { model
+                                            | story = getName hero_fighting model.worldModel ++ " is defeated! -1 HP"
+                                            , worldModel =
+                                                updateWorldModel
+                                                    [ hero_fighting ++ ".defeated" ]
+                                                    model.worldModel
+                                            , score = model.score - 1
+                                            , battleHistory = recordLoss model.battleHistory
+                                        }
 
                                     else
-                                        ( getName hero_fighting model.worldModel ++ " is victorious! +1 HP"
-                                        , updateWorldModel
-                                            [ hero_fighting ++ ".victorious"
-                                            , monster_fighting ++ ".defeated"
-                                            ]
-                                            model.worldModel
-                                        , 1
-                                        )
+                                        { model
+                                            | story = getName hero_fighting model.worldModel ++ " is victorious! +1 HP"
+                                            , worldModel =
+                                                updateWorldModel
+                                                    [ hero_fighting ++ ".victorious"
+                                                    , monster_fighting ++ ".defeated"
+                                                    ]
+                                                    model.worldModel
+                                            , score = model.score + 1
+                                            , battleHistory = recordVictory model.battleHistory
+                                        }
                                 )
                                 (getStat monster_fighting "level" model.worldModel)
                                 (getStat hero_fighting "level" model.worldModel)
-                                |> Maybe.withDefault ( "error determining winner", model.worldModel, 0 )
+                                |> Maybe.withDefault { model | story = "error determining winner" }
                     in
-                    ( { model
-                        | worldModel = worldModel
-                        , story = outcome
-                        , continueButton = Nothing
-                        , score = model.score + scoreChange
-                      }
-                    , after 1200 ClearBattlefield
-                    )
+                    ( { newModel | continueButton = Nothing }, after 1000 ClearBattlefield )
 
                 -- shouldn't ever trigger
                 other ->
@@ -807,6 +821,13 @@ view model =
         isStartFight =
             assert "*.hero.fighting" model.worldModel
 
+        getHistory fn =
+            previewHero
+                |> List.head
+                |> Maybe.andThen (\h -> Dict.get (Tuple.first h) model.battleHistory)
+                |> Maybe.map (fn >> Set.toList >> List.map (\id -> query id model.worldModel) >> List.concat)
+                |> Maybe.withDefault []
+
         noHandlers =
             always []
 
@@ -820,6 +841,20 @@ view model =
                     else
                         []
                    )
+
+        conditionalView conds v =
+            if List.all identity conds then
+                v
+
+            else
+                text ""
+
+        showEmpty l =
+            if List.isEmpty l then
+                [ text "--" ]
+
+            else
+                l
     in
     div [ class "game" ]
         -- [ NarrativeEngine.Debug.debugBar UpdateDebugSearchText model.worldModel model.debug
@@ -834,6 +869,18 @@ view model =
                 [ div [ class "pure-g battlefield", classList [ ( "fighting", isStartFight ) ] ]
                     [ div [ class "pure-u-1-2 fighting-zone" ] [ firstOf (previewHero ++ fightingHero) ]
                     , div [ class "pure-u-1-2 fighting-zone" ] [ firstOf fightingMonster ]
+                    , conditionalView
+                        [ model.chooseHero
+                        , not <| List.isEmpty previewHero
+                        , not <| List.isEmpty <| getHistory .beat ++ getHistory .lost
+                        ]
+                      <|
+                        div [ class "pure-u battle-history" ]
+                            [ h3 [] [ text "Defeated:" ]
+                            , div [ class "history-characters" ] <| showEmpty <| characterList noHandlers (getHistory .beat)
+                            , h3 [] [ text "Lost to:" ]
+                            , div [ class "history-characters" ] <| showEmpty <| characterList noHandlers (getHistory .lost)
+                            ]
                     ]
                 , div [ class "story", classList [ ( "hide", String.isEmpty model.story ) ] ]
                     [ Markdown.toHtml [] model.story
