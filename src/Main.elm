@@ -356,6 +356,7 @@ type Msg
     | ResetGame
     | ClearBattlefield
     | Queue (Cmd Msg)
+    | PlaySound String
 
 
 type alias EntitySpec =
@@ -366,18 +367,12 @@ type alias RuleSpec =
     { rule : String, rule_id : String, narrative : String }
 
 
-port addEntities : (List EntitySpec -> msg) -> Sub msg
-
-
-port addRules : (List RuleSpec -> msg) -> Sub msg
+port playSound : String -> Cmd msg
 
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Sub.batch
-        [ addEntities <| AddEntities << parseEntities
-        , addRules <| AddRules << parseRules
-        ]
+    Sub.batch []
 
 
 parseEntities : List EntitySpec -> EntityParser.ParsedWorldModel EntityFields
@@ -541,7 +536,7 @@ update msg model =
                 , score = model.score - model.lineUpCount
                 , continueButton = Nothing
               }
-            , after 1000 Tick
+            , Cmd.batch [ after 1000 Tick ]
             )
 
         ResetGame ->
@@ -564,7 +559,7 @@ update msg model =
                         , score = model.score + model.lineUpCount
                         , continueButton = Just <| ( "Get ready...", Queue <| Random.generate StartRound (makeLineUp (model.lineUpCount + 1)) )
                       }
-                    , Cmd.none
+                    , playSound "sfx/win"
                     )
 
                 -- no hero fighting, no heroes left, round lost, restart lineup
@@ -597,7 +592,7 @@ update msg model =
                         , continueButton = Nothing
                         , chooseHero = True
                       }
-                    , Cmd.none
+                    , playSound "sfx/draw"
                     )
 
                 -- monster still fighting, no (undefeated) hero fighting, heroes left, choose hero
@@ -624,39 +619,42 @@ update msg model =
                                 (Maybe.map (\h -> Just { h | lost = Set.insert monster_fighting h.lost })
                                     >> Maybe.withDefault (Just { lost = Set.singleton monster_fighting, beat = Set.empty })
                                 )
-
-                        newModel =
-                            Maybe.map2
-                                (\m_level h_level ->
-                                    if m_level > h_level then
-                                        { model
-                                            | story = getName hero_fighting model.worldModel ++ " is defeated! -1 HP"
-                                            , worldModel =
-                                                updateWorldModel
-                                                    [ hero_fighting ++ ".defeated" ]
-                                                    model.worldModel
-                                            , score = model.score - 1
-                                            , battleHistory = recordLoss model.battleHistory
-                                        }
-
-                                    else
-                                        { model
-                                            | story = getName hero_fighting model.worldModel ++ " is victorious! +1 HP"
-                                            , worldModel =
-                                                updateWorldModel
-                                                    [ hero_fighting ++ ".victorious"
-                                                    , monster_fighting ++ ".defeated"
-                                                    ]
-                                                    model.worldModel
-                                            , score = model.score + 1
-                                            , battleHistory = recordVictory model.battleHistory
-                                        }
-                                )
-                                (getStat monster_fighting "level" model.worldModel)
-                                (getStat hero_fighting "level" model.worldModel)
-                                |> Maybe.withDefault { model | story = "error determining winner" }
                     in
-                    ( { newModel | continueButton = Nothing }, after 1000 ClearBattlefield )
+                    Maybe.map2
+                        (\m_level h_level ->
+                            if m_level > h_level then
+                                ( { model
+                                    | story = getName hero_fighting model.worldModel ++ " is defeated! -1 HP"
+                                    , worldModel =
+                                        updateWorldModel
+                                            [ hero_fighting ++ ".defeated" ]
+                                            model.worldModel
+                                    , score = model.score - 1
+                                    , battleHistory = recordLoss model.battleHistory
+                                    , continueButton = Nothing
+                                  }
+                                , Cmd.batch [ after 1000 ClearBattlefield ]
+                                )
+
+                            else
+                                ( { model
+                                    | story = getName hero_fighting model.worldModel ++ " is victorious! +1 HP"
+                                    , worldModel =
+                                        updateWorldModel
+                                            [ hero_fighting ++ ".victorious"
+                                            , monster_fighting ++ ".defeated"
+                                            ]
+                                            model.worldModel
+                                    , score = model.score + 1
+                                    , battleHistory = recordVictory model.battleHistory
+                                    , continueButton = Nothing
+                                  }
+                                , Cmd.batch [ after 1000 ClearBattlefield ]
+                                )
+                        )
+                        (getStat monster_fighting "level" model.worldModel)
+                        (getStat hero_fighting "level" model.worldModel)
+                        |> Maybe.withDefault ( { model | story = "error determining winner" }, Cmd.none )
 
                 -- shouldn't ever trigger
                 other ->
@@ -693,7 +691,7 @@ update msg model =
                 , story = getName heroId model.worldModel ++ " joins the fight."
                 , continueButton = Nothing
               }
-            , after 1500 Tick
+            , Cmd.batch [ after 1500 Tick, after 800 <| PlaySound "sfx/fight", playSound "sfx/select" ]
             )
 
         HeroPreview Nothing ->
@@ -709,6 +707,9 @@ update msg model =
                     updateWorldModel [ id ++ ".preview" ] model.worldModel
             in
             ( { model | worldModel = worldModel }, Cmd.none )
+
+        PlaySound key ->
+            ( model, playSound key )
 
 
 after : Float -> Msg -> Cmd Msg
