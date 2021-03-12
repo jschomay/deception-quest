@@ -579,11 +579,36 @@ update msg model =
                 -- no monster fighting, no monsters left, round won, level up, queue start round
                 -- Important - this must come before the round lost check!
                 [ [], _, [], _ ] ->
+                    let
+                        gameOver =
+                            model.lineUpCount == 5
+
+                        story =
+                            if gameOver then
+                                "You fought off all the monsters and they've given up!  You did it, your village is safe, you win."
+
+                            else
+                                "You fought off all the monsters! +" ++ String.fromInt model.lineUpCount ++ "HP\n\nBut don't celebrate just yet... looks like trouble brewing on the horizon."
+
+                        continueMsg =
+                            if gameOver then
+                                ResetGame
+
+                            else
+                                GenerateLevelsForRound
+
+                        continueText =
+                            if gameOver then
+                                "Play again"
+
+                            else
+                                "Get ready..."
+                    in
                     ( { model
                         | lineUpCount = model.lineUpCount + 1
-                        , story = "You fought off all the monsters! +" ++ String.fromInt model.lineUpCount ++ "HP\n\nBut don't celebrate just yet... looks like trouble brewing on the horizon."
+                        , story = story
                         , score = model.score + model.lineUpCount
-                        , continueButton = Just <| ( "Get ready...", GenerateLevelsForRound )
+                        , continueButton = Just <| ( continueText, continueMsg )
                       }
                     , playSound "sfx/win"
                     )
