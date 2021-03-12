@@ -66,6 +66,9 @@ type alias Model =
     , rules : MyRules
     , ruleCounts : Dict String Int
     , debug : NarrativeEngine.Debug.State
+    , generatedHeroes : List Character
+    , generatedMonsters : List Character
+    , levelsForRound : Levels
     , chooseHero : Bool
     , lineUpCount : Int
     , story : String
@@ -75,6 +78,12 @@ type alias Model =
     }
 
 
+maxCharacters : Int
+maxCharacters =
+    -- 14 images max
+    14
+
+
 initialModel : ( Model, Cmd Msg )
 initialModel =
     ( { parseErrors = Nothing
@@ -82,6 +91,9 @@ initialModel =
       , rules = Dict.empty
       , ruleCounts = Dict.empty
       , debug = NarrativeEngine.Debug.init
+      , generatedHeroes = []
+      , generatedMonsters = []
+      , levelsForRound = { heroes = [], monsters = [] }
       , chooseHero = False
       , lineUpCount = 3
       , story = ""
@@ -89,7 +101,7 @@ initialModel =
       , score = 10
       , battleHistory = Dict.empty
       }
-    , Random.generate StartRound (makeLineUp 3)
+    , Random.generate LineupGenerated (makeLineUp maxCharacters)
     )
 
 
@@ -226,9 +238,6 @@ heroNameOptions =
 makeLineUp : Int -> Random.Generator LineUp
 makeLineUp n =
     let
-        levelRange =
-            List.range 1 n
-
         heroImageCount =
             13
 
@@ -240,12 +249,6 @@ makeLineUp n =
 
         monsteroImages =
             List.range 1 monsterImageCount |> Random.shuffle
-
-        monsterLevels =
-            levelRange |> List.map ((*) 10) |> Random.shuffle
-
-        heroLevels =
-            levelRange |> List.map ((*) 10 >> (+) 5) |> Random.shuffle
 
         randomNames nameOptions =
             let
@@ -287,17 +290,15 @@ makeLineUp n =
                 |> Random.map Tuple.first
 
         monsters =
-            Random.map3
-                (List.map3 Character)
+            Random.map2
+                (List.map2 Character)
                 (randomNames monsterNameOptions)
-                monsterLevels
                 monsteroImages
 
         heroes =
-            Random.map3
-                (List.map3 Character)
+            Random.map2
+                (List.map2 Character)
                 (randomNames heroNameOptions)
-                heroLevels
                 heroImages
     in
     Random.map2 LineUp heroes monsters
@@ -334,7 +335,7 @@ type alias ParsedEntity =
 
 
 type alias Character =
-    { name : String, level : Int, image : Int }
+    { name : String, image : Int }
 
 
 type alias LineUp =
@@ -343,19 +344,26 @@ type alias LineUp =
     }
 
 
+type alias Levels =
+    { heroes : List Int
+    , monsters : List Int
+    }
+
+
 type Msg
     = InteractWith WorldModel.ID
     | UpdateDebugSearchText String
     | AddEntities (EntityParser.ParsedWorldModel EntityFields)
     | AddRules (RuleParser.ParsedRules RuleFields)
-    | StartRound LineUp
+    | LineupGenerated LineUp
+    | GenerateLevelsForRound
+    | StartRound Levels
     | Tick
     | HeroSelected WorldModel.ID
     | HeroPreview (Maybe WorldModel.ID)
     | ResetRound
     | ResetGame
     | ClearBattlefield
-    | Queue (Cmd Msg)
     | PlaySound String
 
 
@@ -478,10 +486,26 @@ update msg model =
                 Ok newRules ->
                     ( { model | parseErrors = Nothing, rules = Dict.union newRules model.rules }, Cmd.none )
 
-        Queue cmd ->
-            ( model, cmd )
+        LineupGenerated lineUp ->
+            update GenerateLevelsForRound { model | generatedHeroes = lineUp.heroes, generatedMonsters = lineUp.monsters }
 
-        StartRound lineUp ->
+        GenerateLevelsForRound ->
+            let
+                levelRange =
+                    List.range 1 model.lineUpCount
+
+                monsterLevels =
+                    levelRange |> List.map ((*) 10) |> Random.shuffle
+
+                heroLevels =
+                    levelRange |> List.map ((*) 10 >> (+) 5) |> Random.shuffle
+
+                levelsForRound h m =
+                    { heroes = h, monsters = m }
+            in
+            ( model, Random.generate StartRound (Random.map2 levelsForRound heroLevels monsterLevels) )
+
+        StartRound levels ->
             let
                 toId name =
                     name
@@ -492,8 +516,8 @@ update msg model =
                         |> String.replace "\"" ""
 
                 makeCharacter tag =
-                    List.map
-                        (\{ name, level, image } ->
+                    List.map2
+                        (\{ name, image } level ->
                             ( toId name
                             , { tags = emptyTags
                               , stats = emptyStats
@@ -509,12 +533,14 @@ update msg model =
 
                 entities =
                     []
-                        ++ makeCharacter "hero" lineUp.heroes
-                        ++ makeCharacter "monster" lineUp.monsters
+                        ++ makeCharacter "hero" (List.take model.lineUpCount model.generatedHeroes) levels.heroes
+                        ++ makeCharacter "monster" (List.take model.lineUpCount model.generatedMonsters) levels.monsters
                         |> Dict.fromList
             in
             ( { model
                 | worldModel = entities
+                , generatedHeroes = List.drop model.lineUpCount model.generatedHeroes
+                , generatedMonsters = List.drop model.lineUpCount model.generatedMonsters
                 , story = "Your village is under attack from invading monsters!  You must send out your heroes to fight them off.\n\n Just one problem - you don't know anyone's strengths, so you'll have to figure it out as you go."
                 , continueButton = Just ( "Ready!", Tick )
               }
@@ -557,7 +583,7 @@ update msg model =
                         | lineUpCount = model.lineUpCount + 1
                         , story = "You fought off all the monsters! +" ++ String.fromInt model.lineUpCount ++ "HP\n\nBut don't celebrate just yet... looks like trouble brewing on the horizon."
                         , score = model.score + model.lineUpCount
-                        , continueButton = Just <| ( "Get ready...", Queue <| Random.generate StartRound (makeLineUp (model.lineUpCount + 1)) )
+                        , continueButton = Just <| ( "Get ready...", GenerateLevelsForRound )
                       }
                     , playSound "sfx/win"
                     )
@@ -787,6 +813,10 @@ view model =
             else
                 "monster"
 
+        level id =
+            -- getStat id "level" model.worldModel |> Maybe.withDefault 0 |> String.fromInt
+            "?"
+
         imageNum id =
             getStat id "image" model.worldModel |> Maybe.withDefault 1 |> String.fromInt
 
@@ -811,7 +841,7 @@ view model =
                     ]
                     []
                 , div [ class "title" ] [ text name ]
-                , div [ class "level" ] [ text "?" ]
+                , div [ class "level" ] [ text <| level id ]
                 ]
 
         firstOf =
