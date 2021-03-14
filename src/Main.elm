@@ -80,8 +80,9 @@ type alias Model =
 
 maxCharacters : Int
 maxCharacters =
-    -- 14 images max
-    14
+    -- enough images/names to go 4 rounds
+    -- 18
+    3 + 4 + 5 + 6
 
 
 initialModel : ( Model, Cmd Msg )
@@ -134,6 +135,10 @@ monsterNameOptions =
         , "Undead "
         , "Mildly annoying "
         , "Screaming "
+        , "Unstable "
+        , "100 year-old "
+        , "Supernatural "
+        , "Evil "
         ]
     , mains =
         [ "Imp"
@@ -150,6 +155,12 @@ monsterNameOptions =
         , "Zombie"
         , "Hooligan"
         , "Telemarketer"
+        , "Presence"
+        , "Wraith"
+        , "Ghoul"
+        , "Undertaker"
+        , "Poltergeist"
+        , "Halfling"
         ]
     , suffix1s =
         [ " of doom"
@@ -190,6 +201,8 @@ heroNameOptions =
         , "Unlucky "
         , "Undercover "
         , "Super "
+        , "Trigger-happy "
+        , "Fearless "
         ]
     , mains =
         [ "Average Joe"
@@ -206,6 +219,12 @@ heroNameOptions =
         , "Lady Ferrington"
         , "\"Max the Axe\""
         , "Eliza"
+        , "Boddington"
+        , "Cudworth"
+        , "Manfred McMurphy"
+        , "Hector"
+        , "\"Alice the Ace\""
+        , "Jessica"
         ]
     , suffix1s =
         [ " the Disgraced"
@@ -219,6 +238,8 @@ heroNameOptions =
         , " the Unknown"
         , " the Outcast"
         , " the Wonderful"
+        , " Senior"
+        , " Junior"
         ]
     , suffix2s =
         [ ", from far, far away"
@@ -239,10 +260,10 @@ makeLineUp : Int -> Random.Generator LineUp
 makeLineUp n =
     let
         heroImageCount =
-            13
+            22
 
         monsterImageCount =
-            14
+            22
 
         heroImages =
             List.range 1 heroImageCount |> Random.shuffle
@@ -271,9 +292,9 @@ makeLineUp n =
                                             , NameOptions ps ms s1s s2s
                                             )
                                         )
-                                        (sometimesTakeName 0.5 prefixs)
+                                        (sometimesTakeName 0.4 prefixs)
                                         (sometimesTakeName 1 mains)
-                                        (sometimesTakeName 0.3 suffix1s)
+                                        (sometimesTakeName 0.2 suffix1s)
                                         (sometimesTakeName 0.2 suffix2s)
                             )
                             g
@@ -581,7 +602,7 @@ update msg model =
                 [ [], _, [], _ ] ->
                     let
                         gameOver =
-                            model.lineUpCount == 5
+                            model.lineUpCount == 6
 
                         story =
                             if gameOver then
