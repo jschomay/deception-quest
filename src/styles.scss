@@ -1,9 +1,12 @@
 @import '~purecss/build/pure.css';
 
 $base-color: rgba(60,44,11,1);
+$dark-color: #151826;
 $secondary-color: rgba(161,115,20,1);
+$secondary-color-t: rgba(161,115,20,0.85);
 $highlight-color: #e0b252;
 $light-color: rgb(255,236,196);
+$light-color-t: rgba(255,236,196, 0.3);
 
 $gradient-dark: radial-gradient(circle, $secondary-color 0%, $base-color 100%);
 $gradient-light: radial-gradient(circle, $light-color 0%, $base-color 100%);
@@ -14,7 +17,11 @@ $shadow-lg: 3px 3px 10px 3px rgba(0,0,0,0.8);
 @mixin prevent-fout { .wf-loading & { opacity: 0; visibility: none; } }
 @mixin fade-in { opacity: 1; transition: linear opacity 0.3s; }
 
-@keyframes pulse { 50% { opacity: 1; } }
+@keyframes pulse {
+  100% { box-shadow: 0px 0px 0px 0px $highlight-color; }
+  50% { box-shadow: 0px 0px 5px 5px $highlight-color; }
+  100% { box-shadow: 0px 0px 0px 0px $highlight-color; }
+}
 @keyframes fight-hero { 100% { transform: translateX(80px) rotate(3deg); } }
 @keyframes fight-monster { 100% { transform: translateX(-80px) rotate(-3deg); } }
 @keyframes clear { 100% { top: 600px; left: -200px; } }
@@ -25,12 +32,8 @@ $ease-back: cubic-bezier(.6,-0.28,.74,.05);
 
 @mixin clear-animation { animation: clear 0.2s ease-out 1.0s forwards; }
 
-.box {
-  animation: pulse .5s ease-out 2;
-}
-
 body {
-    background: $base-color;
+    background: $dark-color;
     height: 100vh;
     color: $highlight-color;
 }
@@ -39,10 +42,15 @@ body {
     height: 100%;
     margin-left: auto;
     margin-right: auto;
-    background: $base-color;
+    background: $dark-color url(images/bg.png) no-repeat center 10%;
+    background-size: contain;
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    border-top: 7px solid $secondary-color;
+    box-sizing: border-box;
 }
 
 .title-main-wrapper {
@@ -111,7 +119,7 @@ body {
 }
 
 .characters {
-    background:  linear-gradient(90deg, $highlight-color 0%, $base-color 100%);
+    background: linear-gradient(270deg, #00000000 0%, $dark-color 60%);
     box-sizing: border-box;
     display: flex;
     height: 100%;
@@ -121,21 +129,9 @@ body {
     position: relative;
 
     &.characters-monsters {
-        background:  linear-gradient(270deg, $highlight-color 0%, $base-color 100%);
+        background: linear-gradient(90deg, #00000000 0%, $dark-color 60%);
         justify-content: flex-end;
 }
-
-    &:before {
-        content: "";
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        opacity: 0;
-        background:  linear-gradient(90deg, $light-color 0%, $base-color 100%);
-    }
-
-    &.select:before { animation: pulse 1.3s ease-in-out infinite; }
-
 
     .character {
         z-index: 1;
@@ -181,7 +177,11 @@ body {
     position: relative;
     transition: opacity 0.3s, 0.2s, transform 0.2s $ease-back;
 
-    .select &:hover { transform: scale(1.05) rotate(1deg) }
+    .select & { animation: pulse 2s ease-in-out infinite; }
+    .select &:hover {
+        transition: transform 0.1s 0s $ease-back;
+        transform: scale(1.05) rotate(1deg);
+    }
 
     .fighting &.character-hero { @include fight-animation(fight-hero) }
     .fighting &.character-monster { @include fight-animation(fight-monster) }
@@ -258,7 +258,7 @@ body {
     box-sizing: border-box;
     margin: 20px;
     margin-top: 50px;
-    background:  $secondary-color;
+    background:  $secondary-color-t;
     box-shadow: $shadow;
     height: 350px;
     padding: 40px 20px;

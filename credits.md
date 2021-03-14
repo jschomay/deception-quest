@@ -1,4 +1,7 @@
-Images
+Background image
+https://edermunizz.itch.io/free-pixel-art-forest
+
+Character images
 https://xyezawr.itch.io/
 https://oco.itch.io/
 https://hajileee.itch.io/
