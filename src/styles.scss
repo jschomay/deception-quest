@@ -175,7 +175,7 @@ body {
     overflow: hidden;
     @include prevent-fout;
     position: relative;
-    transition: opacity 0.3s, 0.2s, transform 0.2s $ease-back;
+    transition: opacity 0.3s, transform 0.3s 0.2s $ease-back;
 
     .select & { animation: pulse 2s ease-in-out infinite; }
     .select &:hover {
@@ -264,6 +264,24 @@ body {
     padding: 40px 20px;
 }
 
+.select-bonus {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+
+    h3, p {
+      font-family: 'VT323', sans-serif;
+      margin: 0;
+    }
+
+    button {
+      margin-bottom: 10px;
+      text-align: left;
+      white-space: pre-wrap !important;
+    }
+}
+
 .fighting-zone {
     display: flex;
     justify-content: center;
@@ -297,6 +315,7 @@ body {
 
 .previous-battles {
     display: flex;
+    flex: 1 1 auto;
 
     .character {
         width: 65px;
@@ -379,9 +398,24 @@ body {
     }
 }
 
+.spells {
+  margin-right: 20px;
+  text-align: right;
+
+  button {
+    margin-bottom: 3px;
+    padding: 3px 2px;
+    color: $base-color;
+    font-family: 'VT323', sans-serif;
+    font-size: 1em;
+    display: block;
+
+    &:hover { cursor: pointer; }
+  }
+}
+
 .hp {
-  right: 40px;
-  position: relative;
+  margin-right: 40px;
   color: $light-color;
   background: $base-color;
   padding: 3px 10px;

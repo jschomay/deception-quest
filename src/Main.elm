@@ -70,11 +70,15 @@ type alias Model =
     , generatedMonsters : List Character
     , levelsForRound : Levels
     , chooseHero : Bool
+    , chooseBonus : Bool
     , lineUpCount : Int
     , story : String
     , continueButton : Maybe ( String, Msg )
     , score : Int
     , battleHistory : Dict WorldModel.ID { beat : Set WorldModel.ID, lost : Set WorldModel.ID }
+    , spells : List String
+    , bonuses : Set String
+    , bonusOptions : List String
     }
 
 
@@ -96,14 +100,109 @@ initialModel =
       , generatedMonsters = []
       , levelsForRound = { heroes = [], monsters = [] }
       , chooseHero = False
+      , chooseBonus = False
       , lineUpCount = 3
       , story = ""
       , continueButton = Nothing
       , score = 10
       , battleHistory = Dict.empty
+      , spells = []
+      , bonuses = Set.empty
+      , bonusOptions = []
       }
     , Random.generate LineupGenerated (makeLineUp maxCharacters)
     )
+
+
+bonuses =
+    Dict.empty
+        |> bonus "Lucky day" "+10 HP" (\k m -> { m | score = m.score + 10 })
+        |> bonus "Charm of persistent insight" "Reveal a monster's level when it is defeated" addBonus
+        |> bonus "Scroll of self awareness" "Always reveal hero levels" addBonus
+        |> bonus "Relic of photographic memory" "See outcomes of previous battles" addBonus
+        |> spell "Appeal for bravery"
+            "Reveal the level of a hero who has not yet been selected, and can beat the current monster (one-time spell)"
+            addSpell
+            (\m ->
+                let
+                    monsterId =
+                        query "*.monster.fighting" m.worldModel
+                            |> List.head
+                            |> Maybe.map Tuple.first
+                            |> Maybe.withDefault "?"
+                in
+                case query ("*.hero.!defeated.!victorious.!fighting.level>(stat " ++ monsterId ++ ".level)") m.worldModel |> List.head |> Maybe.map Tuple.first of
+                    Nothing ->
+                        { m | story = "You shout for a brave hero to step forward... but none do.  The heroes that can beat this monster must have already perished.  What a shame." }
+
+                    Just id ->
+                        { m
+                            | story = "You shout for a brave hero to step forward.  " ++ getName id m.worldModel ++ " answers the call."
+                            , worldModel = updateWorldModel [ id ++ ".revealed" ] m.worldModel
+                        }
+            )
+        |> spell "Summoning of identification"
+            "Reveal level of current monster (one-time spell)"
+            addSpell
+            (\m ->
+                case query "*.monster.fighting.revealed" m.worldModel of
+                    [] ->
+                        { m
+                            | worldModel = updateWorldModel [ "(*.monster.fighting).revealed" ] m.worldModel
+                            , story = "You mutter the forbidden words, the monster fidgets, then bashfully admits its level."
+                        }
+
+                    _ ->
+                        { m | story = "You mutter the forbidden words, the monster fidgets, then laughs at you, as it reveals the information you already knew.  Rookie mistake." }
+            )
+        |> spell "Incantation of fortification"
+            "Increase level of all currently defeated heroes (one-time spell)"
+            addSpell
+            (\m ->
+                case query "*.hero.defeated" m.worldModel of
+                    [] ->
+                        { m | story = "You cast this potent spell to strengthen the fallen... but no one is able to benefit.  That was foolish." }
+
+                    _ ->
+                        { m
+                            | worldModel = updateWorldModel [ "(*.hero.defeated).level+10" ] m.worldModel
+                            , story = "You look around and see your fallen heroes.  This day things look bleak.  But tomorrow already feels more promising."
+                        }
+            )
+        |> spell "Show of fierceness"
+            "All defeated monsters will run away (one-time spell)"
+            addSpell
+            (\m ->
+                case query "*.monster.defeated" m.worldModel of
+                    [] ->
+                        { m | story = "You muster your strength and give a mighty howl.  But none of the monsters have taken any blows yet, so they just look at you with a mix of bewilderment and disapproval." }
+
+                    _ ->
+                        { m
+                            | worldModel = updateWorldModel [ "(*.monster.defeated).-monster.-defeated" ] m.worldModel
+                            , story = "You muster your strength and give a mighty howl.  The defeated monsters eye you cautiously.  You take the opportunity and jab at them.  They turn their tails and run off.  Good show."
+                        }
+            )
+
+
+bonus name desc selectFn =
+    Dict.insert name { name = name, description = desc, selectFn = selectFn name, useFn = identity }
+
+
+spell name desc selectFn useFn =
+    Dict.insert name { name = name, description = desc, selectFn = selectFn name, useFn = useFn }
+
+
+addBonus k m =
+    { m | bonuses = Set.insert k m.bonuses }
+
+
+addSpell k m =
+    { m | spells = k :: m.spells }
+
+
+hasBonus k m =
+    Set.member k m.bonuses
 
 
 type alias NameOptions =
@@ -378,6 +477,9 @@ type Msg
     | AddRules (RuleParser.ParsedRules RuleFields)
     | LineupGenerated LineUp
     | GenerateLevelsForRound
+    | BonusesGenerated (List String)
+    | BonusSelected (Model -> Model)
+    | UseSpell String (Model -> Model)
     | StartRound Levels
     | Tick
     | HeroSelected WorldModel.ID
@@ -508,7 +610,18 @@ update msg model =
                     ( { model | parseErrors = Nothing, rules = Dict.union newRules model.rules }, Cmd.none )
 
         LineupGenerated lineUp ->
-            update GenerateLevelsForRound { model | generatedHeroes = lineUp.heroes, generatedMonsters = lineUp.monsters }
+            ( { model | generatedHeroes = lineUp.heroes, generatedMonsters = lineUp.monsters }
+            , Random.generate BonusesGenerated (Dict.keys bonuses |> Random.shuffle)
+            )
+
+        BonusesGenerated bonusOptions ->
+            update GenerateLevelsForRound { model | bonusOptions = bonusOptions }
+
+        BonusSelected selectFn ->
+            update GenerateLevelsForRound (selectFn { model | bonusOptions = List.drop 2 model.bonusOptions })
+
+        UseSpell usedName useFn ->
+            ( useFn { model | spells = List.filter (\name -> name /= usedName) model.spells }, Cmd.none )
 
         GenerateLevelsForRound ->
             let
@@ -524,7 +637,7 @@ update msg model =
                 levelsForRound h m =
                     { heroes = h, monsters = m }
             in
-            ( model, Random.generate StartRound (Random.map2 levelsForRound heroLevels monsterLevels) )
+            ( { model | chooseBonus = False }, Random.generate StartRound (Random.map2 levelsForRound heroLevels monsterLevels) )
 
         StartRound levels ->
             let
@@ -554,7 +667,15 @@ update msg model =
 
                 entities =
                     []
-                        ++ makeCharacter "hero" (List.take model.lineUpCount model.generatedHeroes) levels.heroes
+                        ++ (makeCharacter "hero" (List.take model.lineUpCount model.generatedHeroes) levels.heroes
+                                |> List.map
+                                    (if hasBonus "Scroll of self awareness" model then
+                                        Tuple.mapSecond (addTag "revealed")
+
+                                     else
+                                        identity
+                                    )
+                           )
                         ++ makeCharacter "monster" (List.take model.lineUpCount model.generatedMonsters) levels.monsters
                         |> Dict.fromList
             in
@@ -609,27 +730,21 @@ update msg model =
                                 "You fought off all the monsters and they've given up!  You did it, your village is safe, you win."
 
                             else
-                                "You fought off all the monsters! +" ++ String.fromInt model.lineUpCount ++ "HP\n\nBut don't celebrate just yet... looks like trouble brewing on the horizon."
+                                "You fought off all the monsters! +" ++ String.fromInt model.lineUpCount ++ " HP, and you get to choose a bonus above.\n\nBut don't celebrate just yet... looks like trouble brewing on the horizon."
 
-                        continueMsg =
+                        continue =
                             if gameOver then
-                                ResetGame
+                                Just ( "Play again", ResetGame )
 
                             else
-                                GenerateLevelsForRound
-
-                        continueText =
-                            if gameOver then
-                                "Play again"
-
-                            else
-                                "Get ready..."
+                                Nothing
                     in
                     ( { model
                         | lineUpCount = model.lineUpCount + 1
                         , story = story
+                        , chooseBonus = not gameOver
                         , score = model.score + model.lineUpCount
-                        , continueButton = Just <| ( continueText, continueMsg )
+                        , continueButton = continue
                       }
                     , playSound "sfx/win"
                     )
@@ -714,7 +829,13 @@ update msg model =
                                     , worldModel =
                                         updateWorldModel
                                             [ hero_fighting ++ ".victorious"
-                                            , monster_fighting ++ ".defeated"
+                                            , monster_fighting
+                                                ++ (if hasBonus "Charm of persistent insight" model then
+                                                        ".defeated.revealed"
+
+                                                    else
+                                                        ".defeated"
+                                                   )
                                             ]
                                             model.worldModel
                                     , score = model.score + 1
@@ -860,8 +981,11 @@ view model =
                 "monster"
 
         level id =
-            -- getStat id "level" model.worldModel |> Maybe.withDefault 0 |> String.fromInt
-            "?"
+            if assert (id ++ ".revealed") model.worldModel then
+                getStat id "level" model.worldModel |> Maybe.map String.fromInt |> Maybe.withDefault "error"
+
+            else
+                "?"
 
         imageNum id =
             getStat id "image" model.worldModel |> Maybe.withDefault 1 |> String.fromInt
@@ -889,6 +1013,36 @@ view model =
                 , div [ class "title" ] [ text name ]
                 , div [ class "level" ] [ text <| level id ]
                 ]
+
+        chooseBonus =
+            model.bonusOptions
+                |> List.take 2
+                |> List.map
+                    (\n ->
+                        Dict.get n bonuses
+                            |> Maybe.withDefault { name = "error", description = "finding bonus", selectFn = identity, useFn = identity }
+                    )
+                |> List.map
+                    (\{ name, description, selectFn } ->
+                        button [ class "pure-button button-primary", onClick (BonusSelected selectFn) ]
+                            [ h3 [] [ text name ]
+                            , p [] [ text description ]
+                            ]
+                    )
+                |> div [ class "pure-u-1 select-bonus" ]
+
+        spells =
+            model.spells
+                |> List.map
+                    (\n ->
+                        Dict.get n bonuses
+                            |> Maybe.withDefault { name = "error", description = "finding bonus", selectFn = identity, useFn = identity }
+                    )
+                |> List.map
+                    (\{ name, useFn } ->
+                        button [ class "pure-button button-primary", onClick (UseSpell name useFn) ] [ text name ]
+                    )
+                |> div [ class "spells" ]
 
         firstOf =
             List.head
@@ -944,10 +1098,12 @@ view model =
                 (characterList heroHandlers heroes)
             , div [ class "pure-u-1-2 " ]
                 [ div [ class "pure-g battlefield", classList [ ( "fighting", isStartFight ) ] ]
-                    [ div [ class "pure-u-1-2 fighting-zone" ] [ firstOf (previewHero ++ fightingHero) ]
-                    , div [ class "pure-u-1-2 fighting-zone" ] [ firstOf fightingMonster ]
+                    [ conditionalView [ model.chooseBonus ] chooseBonus
+                    , conditionalView [ not model.chooseBonus ] <| div [ class "pure-u-1-2 fighting-zone" ] [ firstOf (previewHero ++ fightingHero) ]
+                    , conditionalView [ not model.chooseBonus ] <| div [ class "pure-u-1-2 fighting-zone" ] [ firstOf fightingMonster ]
                     , conditionalView
                         [ model.chooseHero
+                        , hasBonus "Relic of photographic memory" model
                         , not <| List.isEmpty previewHero
                         , not <| List.isEmpty <| getHistory .beat ++ getHistory .lost
                         ]
@@ -968,6 +1124,7 @@ view model =
             ]
         , div [ class "bottom" ]
             [ div [ class "previous-battles" ] (characterList noHandlers (defeated ++ victorious))
+            , conditionalView [ model.chooseHero ] spells
             , div [ class "hp" ] [ text <| "HP " ++ String.fromInt model.score ]
             ]
         ]
