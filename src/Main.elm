@@ -762,6 +762,7 @@ update msg model =
                     else
                         ( { model
                             | story = "You are out of heroes, but monsters still remain.  You have lost the battle.  You also don't have enough HP left to try again.  You have failed, the monsters win."
+                            , worldModel = updateWorldModel [ "(*).-defeated.-victorious.revealed" ] model.worldModel
                             , continueButton = Just ( "Restart", ResetGame )
                           }
                         , Cmd.none
