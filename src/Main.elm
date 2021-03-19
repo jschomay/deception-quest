@@ -641,8 +641,10 @@ update msg model =
 
         StartRound levels ->
             let
-                toId name =
-                    name
+                toId tag name =
+                    tag
+                        ++ "-"
+                        ++ name
                         |> String.replace " " "_"
                         |> String.replace "," ""
                         |> String.replace "'" "_"
@@ -652,7 +654,7 @@ update msg model =
                 makeCharacter tag =
                     List.map2
                         (\{ name, image } level ->
-                            ( toId name
+                            ( toId tag name
                             , { tags = emptyTags
                               , stats = emptyStats
                               , links = emptyLinks
