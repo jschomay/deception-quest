@@ -79,6 +79,7 @@ type alias Model =
     , spells : List String
     , bonuses : Set String
     , bonusOptions : List String
+    , round : Int
     }
 
 
@@ -109,6 +110,7 @@ initialModel =
       , spells = []
       , bonuses = Set.empty
       , bonusOptions = []
+      , round = 1
       }
     , Random.generate LineupGenerated (makeLineUp maxCharacters)
     )
@@ -703,7 +705,8 @@ update msg model =
             ( { model
                 | worldModel = worldModel
                 , story = "The clock rolls back..."
-                , score = model.score - model.lineUpCount
+                , score = model.score - model.round
+                , round = model.round + 1
                 , continueButton = Nothing
               }
             , Cmd.batch [ after 1000 Tick ]
@@ -746,6 +749,7 @@ update msg model =
                         , story = story
                         , chooseBonus = not gameOver
                         , score = model.score + model.lineUpCount
+                        , round = 1
                         , continueButton = continue
                       }
                     , playSound "sfx/win"
@@ -755,7 +759,7 @@ update msg model =
                 [ _, [], _, [] ] ->
                     if model.score >= model.lineUpCount then
                         ( { model
-                            | story = "You are out of heroes, but monsters still remain.  You have lost the battle.\n\nHowever, you have more insight now.  For " ++ String.fromInt model.lineUpCount ++ " HP you can try again."
+                            | story = "You are out of heroes, but monsters still remain.  You have lost the battle.\n\nHowever, you have more insight now.  For " ++ String.fromInt model.round ++ " HP you can try again."
                             , continueButton = Just ( "Try again", ResetRound )
                           }
                         , Cmd.none
