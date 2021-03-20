@@ -752,6 +752,7 @@ update msg model =
                         , story = story
                         , chooseBonus = not gameOver
                         , score = model.score + model.lineUpCount
+                        , worldModel = updateWorldModel [ "(*).-defeated.-victorious.revealed" ] model.worldModel
                         , round = 1
                         , continueButton = continue
                       }
