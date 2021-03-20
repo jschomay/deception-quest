@@ -183,8 +183,8 @@ body {
         transform: scale(1.05) rotate(1deg);
     }
 
-    .fighting &.character-hero { @include fight-animation(fight-hero) }
-    .fighting &.character-monster { @include fight-animation(fight-monster) }
+    .start-fight &.character-hero { @include fight-animation(fight-hero) }
+    .start-fight &.character-monster { @include fight-animation(fight-monster) }
 
 
     .battlefield & {

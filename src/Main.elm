@@ -123,7 +123,7 @@ bonuses =
         |> bonus "Scroll of self awareness" "Always reveal hero levels" addBonus
         |> bonus "Relic of photographic memory" "See outcomes of previous battles" addBonus
         |> spell "Appeal for bravery"
-            "Reveal the level of a hero who has not yet been selected, and can beat the current monster (one-time spell)"
+            "Automatically select a hero who can beat the current monster, and reveal that hero's level (one-time spell)"
             addSpell
             (\m ->
                 let
@@ -140,7 +140,9 @@ bonuses =
                     Just id ->
                         { m
                             | story = "You shout for a brave hero to step forward.  " ++ getName id m.worldModel ++ " answers the call."
-                            , worldModel = updateWorldModel [ id ++ ".revealed" ] m.worldModel
+                            , continueButton = Just ( "Continue", AppealForBraveryContinue )
+                            , chooseHero = False
+                            , worldModel = updateWorldModel [ id ++ ".revealed.fighting" ] m.worldModel
                         }
             )
         |> spell "Summoning of identification"
@@ -485,6 +487,7 @@ type Msg
     | StartRound Levels
     | Tick
     | HeroSelected WorldModel.ID
+    | AppealForBraveryContinue
     | HeroPreview (Maybe WorldModel.ID)
     | ResetRound
     | ResetGame
@@ -874,14 +877,13 @@ update msg model =
             , after 1500 Tick
             )
 
+        AppealForBraveryContinue ->
+            ( { model | continueButton = Nothing }
+            , Cmd.batch [ after 1500 Tick, after 800 <| PlaySound "sfx/fight" ]
+            )
+
         HeroSelected heroId ->
             let
-                attackingMonsterName =
-                    query "*.monster.fighting" model.worldModel
-                        |> List.head
-                        |> Maybe.map (\( id, _ ) -> getName id model.worldModel)
-                        |> Maybe.withDefault "the monster"
-
                 worldModel =
                     updateWorldModel [ heroId ++ ".fighting.-preview" ] model.worldModel
             in
@@ -1057,7 +1059,8 @@ view model =
                 >> Maybe.withDefault (div [ class "hero-placeholder" ] [])
 
         isStartFight =
-            assert "*.hero.fighting" model.worldModel
+            -- works for both HeroSelected and AppealForBraveryContinue
+            assert "*.hero.fighting" model.worldModel && model.continueButton == Nothing
 
         getHistory fn =
             previewHero
@@ -1104,7 +1107,7 @@ view model =
                 ]
                 (characterList heroHandlers heroes)
             , div [ class "pure-u-1-2 " ]
-                [ div [ class "pure-g battlefield", classList [ ( "fighting", isStartFight ) ] ]
+                [ div [ class "pure-g battlefield", classList [ ( "start-fight", isStartFight ) ] ]
                     [ conditionalView [ model.chooseBonus ] chooseBonus
                     , conditionalView [ not model.chooseBonus ] <| div [ class "pure-u-1-2 fighting-zone" ] [ firstOf (previewHero ++ fightingHero) ]
                     , conditionalView [ not model.chooseBonus ] <| div [ class "pure-u-1-2 fighting-zone" ] [ firstOf fightingMonster ]
