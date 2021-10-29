@@ -10,6 +10,8 @@ var numAssetsLoaded = 0;
 const loadedSounds = {};
 
 function allAssetsLoaded() {
+    // return to stay on loading screen
+    return;
     // note, this replaces the full <body>
     let app = Elm.Main.init({ flags: 6 });
     app.ports.playSound.subscribe((key) => {

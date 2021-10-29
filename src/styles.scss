@@ -38,6 +38,68 @@ body {
     color: $highlight-color;
 }
 
+.blank {
+  display: flex;
+  flex-direction: flex-row;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.loading {
+  .top {
+    border: 1px solid $light-color;
+    height: 675px;
+    width: 680px;
+    margin: auto;
+    flex: 0 0 auto;
+  }
+
+  .brand {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 60px;
+  }
+
+  .title-main-wrapper {
+    position: relative;
+  }
+
+  .battlefield {
+    height: auto;
+    margin-top: 110px;
+    font-family: 'VT323', sans-serif;
+    text-align: center;
+    font-size: 28px;
+    padding: 5px 60px;
+    border-radius: 15px;
+
+    &.heroes {
+      display: none;
+      background: $secondary-color;
+      color: $light-color;
+    }
+
+    &.monsters {
+      display: none;
+      background: $base-color;
+      color: $secondary-color;
+    }
+
+    &.tagline {
+      // display: none;
+      background: $secondary-color;
+      color: $base-color;
+      font-size: 26px;
+      width: 399px;
+      padding: 2px 0px;
+      z-index: 999;
+      border-radius: 12px;
+    }
+  }
+}
+
 .game {
     height: 100%;
     margin-left: auto;
@@ -159,18 +221,15 @@ body {
 }
 
 .character {
-    box-shadow: $shadow;
     background: $gradient-light;
-    width: 170px;
-    height: 225px;
-    border: 5px solid $light-color;
-    border-radius: 10px;
+    width: 675px;
+    height: 980px;
     flex: 0 0 auto;
     display: flex;
     flex-direction: column;
     align-items: stretch;
     justify-content: space-between;
-    margin: 10px;
+    margin: 1px;
     opacity: 1;
     overflow: hidden;
     @include prevent-fout;
@@ -205,7 +264,7 @@ body {
     }
 
     .img {
-        margin: 30px;
+        margin: 50px;
         flex: 1 1 auto;
         image-rendering: crisp-edges;
         image-rendering: pixelated;
@@ -217,29 +276,19 @@ body {
 
     .title {
         align-self: stretch;
-        padding: 10px 5px;
+        padding: 30px 20px;
+        padding-top: 20px;
         display: block;
         background: $base-color;
         text-align: center;
         color: $highlight-color;
-        border-radius: 5px;
         font-family: 'VT323', sans-serif;
         position: relative;
+        font-size: 55px;
     }
 
     .level {
-        color: $base-color;
-        background: $light-color;
-        position: absolute;
-        top: px;
-        left: px;
-        padding: 0 5px 5px 0;
-        border-radius: 0 0 15px 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-family: 'VT323', sans-serif;
-        font-size: 1.4em;
+        display: none;
     }
 }
 

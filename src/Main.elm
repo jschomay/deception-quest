@@ -102,7 +102,7 @@ initialModel =
       , levelsForRound = { heroes = [], monsters = [] }
       , chooseHero = False
       , chooseBonus = False
-      , lineUpCount = 3
+      , lineUpCount = 30
       , story = ""
       , continueButton = Nothing
       , score = 10
@@ -1098,47 +1098,9 @@ view model =
             else
                 l
     in
-    div [ class "game" ]
-        -- [ NarrativeEngine.Debug.debugBar UpdateDebugSearchText model.worldModel model.debug
-        [ div [ class "title-main-wrapper" ] [ h3 [ class "title-main" ] [ text "Deduction Quest" ] ]
-        , div [ class "pure-g top" ]
-            [ div
-                [ class "pure-u-1-4 characters characters-heroes"
-                , classList [ ( "select", model.chooseHero ) ]
-                ]
-                (characterList heroHandlers heroes)
-            , div [ class "pure-u-1-2 " ]
-                [ div [ class "pure-g battlefield", classList [ ( "start-fight", isStartFight ) ] ]
-                    [ conditionalView [ model.chooseBonus ] chooseBonus
-                    , conditionalView [ not model.chooseBonus ] <| div [ class "pure-u-1-2 fighting-zone" ] [ firstOf (previewHero ++ fightingHero) ]
-                    , conditionalView [ not model.chooseBonus ] <| div [ class "pure-u-1-2 fighting-zone" ] [ firstOf fightingMonster ]
-                    , conditionalView
-                        [ model.chooseHero
-                        , hasBonus "Relic of photographic memory" model
-                        , not <| List.isEmpty previewHero
-                        , not <| List.isEmpty <| getHistory .beat ++ getHistory .lost
-                        ]
-                      <|
-                        div [ class "pure-u battle-history" ]
-                            [ h3 [] [ text "Defeated:" ]
-                            , div [ class "history-characters" ] <| showEmpty <| characterList noHandlers (getHistory .beat)
-                            , h3 [] [ text "Lost to:" ]
-                            , div [ class "history-characters" ] <| showEmpty <| characterList noHandlers (getHistory .lost)
-                            ]
-                    ]
-                , div [ class "story", classList [ ( "hide", String.isEmpty model.story ) ] ]
-                    [ Markdown.toHtml [] model.story
-                    , Maybe.map (\( prompt, msg ) -> button [ class "pure-button button-primary", onClick msg ] [ text prompt ]) model.continueButton |> Maybe.withDefault (text "")
-                    ]
-                ]
-            , div [ class "pure-u-1-4 characters characters-monsters" ] (characterList noHandlers monsters)
-            ]
-        , div [ class "bottom" ]
-            [ div [ class "previous-battles" ] (characterList noHandlers (defeated ++ victorious))
-            , conditionalView [ model.chooseHero ] spells
-            , div [ class "hp" ] [ text <| "HP " ++ String.fromInt model.score ]
-            ]
-        ]
+    div [ class "blank" ] <|
+        characterList heroHandlers heroes
+            ++ characterList noHandlers monsters
 
 
 main : Program () Model Msg

@@ -1,10 +1,10 @@
 const path = require("path");
-const {merge} = require('webpack-merge');
+const { merge } = require("webpack-merge");
 
 const ClosurePlugin = require("closure-webpack-plugin");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 const HTMLWebpackPlugin = require("html-webpack-plugin");
-const {CleanWebpackPlugin} = require("clean-webpack-plugin");
+const { CleanWebpackPlugin } = require("clean-webpack-plugin");
 
 // Production CSS assets - separate, minimised file
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
@@ -12,7 +12,8 @@ const OptimizeCSSAssetsPlugin = require("optimize-css-assets-webpack-plugin");
 
 var MODE =
     process.env.npm_lifecycle_event === "prod" ? "production" : "development";
-var withDebug = !process.env["npm_config_nodebug"] && MODE === "development";
+var withDebug =
+    false && !process.env["npm_config_nodebug"] && MODE === "development";
 // this may help for Yarn users
 // var withDebug = !npmParams.includes("--nodebug");
 console.log(
@@ -98,7 +99,7 @@ if (MODE === "development") {
                     test: /\.elm$/,
                     exclude: [/elm-stuff/, /node_modules/],
                     use: [
-                        {loader: "elm-hot-webpack-loader"},
+                        { loader: "elm-hot-webpack-loader" },
                         {
                             loader: "elm-webpack-loader",
                             options: {
@@ -121,7 +122,7 @@ if (MODE === "development") {
             before(app) {
                 // on port 3000
                 app.get("/test", function (req, res) {
-                    res.json({result: "OK"});
+                    res.json({ result: "OK" });
                 });
             }
         }
@@ -133,7 +134,7 @@ if (MODE === "production") {
         optimization: {
             minimizer: [
                 new ClosurePlugin(
-                    {mode: "STANDARD"},
+                    { mode: "STANDARD" },
                     {
                         // compiler flags here
                         //
@@ -184,10 +185,7 @@ if (MODE === "production") {
                 {
                     test: /\.css$/,
                     exclude: [/elm-stuff/, /node_modules/],
-                    use: [
-                        MiniCssExtractPlugin.loader,
-                        "css-loader?url=false"
-                    ]
+                    use: [MiniCssExtractPlugin.loader, "css-loader?url=false"]
                 },
                 {
                     test: /\.scss$/,
