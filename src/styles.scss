@@ -82,13 +82,14 @@ body {
     }
 
     &.monsters {
-      display: none;
+      // display: none;
       background: $base-color;
       color: $secondary-color;
+      color: $light-color;
     }
 
     &.tagline {
-      // display: none;
+      display: none;
       background: $secondary-color;
       color: $base-color;
       font-size: 26px;
@@ -104,7 +105,8 @@ body {
     height: 100%;
     margin-left: auto;
     margin-right: auto;
-    background: $dark-color url(images/bg.png) no-repeat center 10%;
+    // background: $dark-color url(images/bg.png) no-repeat center 10%;
+    background: $dark-color url(https://img.itch.zone/aW1hZ2UvNDU3MzMzLzIzMjI3MTkucG5n/original/eyl8dN.png) no-repeat center -30%;
     background-size: contain;
     image-rendering: crisp-edges;
     image-rendering: pixelated;
